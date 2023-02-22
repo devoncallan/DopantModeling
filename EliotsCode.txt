@@ -1,0 +1,273 @@
+function model3D_fibrils(s3d)
+
+	struct ThreeDSystem &s3d
+	if(itemsinlist(s3d.paramstring,",")<11)
+		return -1
+	endif
+	newdatafolder /o/s Creatingfibrils
+	variable interpenetration =	str2num(stringfromlist( 0 ,s3d.paramstring,","))
+	variable Fibrilnum = 			str2num(stringfromlist( 1 ,s3d.paramstring,",")) // number of fibrils
+	variable pd = 					str2num(stringfromlist( 2 ,s3d.paramstring,",")) // polydispersity (σ of radius)
+	variable thickness = 			s3d.thickness 
+	variable minsize = 			str2num(stringfromlist( 3 ,s3d.paramstring,","))
+	variable maxsize = 			str2num(stringfromlist( 4 ,s3d.paramstring,","))
+	variable angsigma = 			str2num(stringfromlist( 5 ,s3d.paramstring,",")) # σ (around x-plane in degrees)
+	variable volfrac = 			str2num(stringfromlist( 6 ,s3d.paramstring,","))
+	variable noise = 				str2num(stringfromlist( 7 ,s3d.paramstring,","))
+	variable minsep = 				str2num(stringfromlist( 8 ,s3d.paramstring,","))
+	variable minlength = 			str2num(stringfromlist( 9 ,s3d.paramstring,","))
+	variable maxlength = 			str2num(stringfromlist( 10 ,s3d.paramstring,","))
+	variable shellalignment =  str2num(stringfromlist( 11 ,s3d.paramstring,","))
+	variable shellwidpct =  min(100,max(0,str2num(stringfromlist( 12 ,s3d.paramstring,","))))/100
+	variable type = 				str2num(stringfromlist( 13 ,s3d.paramstring,","))
+	
+    # /o - overwrites existing waves in case of name conflict.
+    # After this you will need to reinitialize the wave or assign appropriate values.
+
+    # /N=n - n is the number of points each wave will have
+    # if n is an expression, it must be encolosed in parenthesis
+
+    # /N=(n1,n2,n3,n4) - specify the number of rows, columns, layers, and chunks each wave will have.
+    # Trailing zeros can be ommitted.
+
+    # /B - Makes 8-bit signed integer or unsigned integer waves if /U is present
+
+    # rmat = make a wave of dimension thickness * resolution ^ 2 by 3
+    # resolution indicates the grid size!
+	make /n=(thickness*s3d.num^2,3)/o rmat
+
+    # make wave of dimension thickness, grid size, grid size
+	make /o /n=(thickness,s3d.num,s3d.num) mat=0,xwave, ywave, zwave, ammat=0
+
+	make /n=( thickness,s3d.num,s3d.num,3)/o vecmat=0
+	if(minsep<1)
+		make/B/U /o /n=(thickness,s3d.num,s3d.num,maxsize) exmat =  (p <= t/(1+minsep)) || (q <= t/(1+minsep)) || (r <= t/(1+minsep) ) || (p >= thickness-t/(1+minsep)) || (q >= s3d.num-t/(1+minsep)) || (r >= s3d.num-t/(1+minsep)) ? 0 : 1
+	else
+		make/B/U /o /n=(thickness,s3d.num,s3d.num,maxsize) exmat =  (p <= t-minsep) || (q <= t-minsep) || (r <= t-minsep) || (p >= thickness-t+minsep) || (q >= s3d.num-t+minsep) || (r >= s3d.num-t+minsep) ? 0 : 1
+	endif
+	make/B/U /o /n=(thickness,s3d.num,s3d.num) tempwave, tempx
+	if(s3d.movie)
+		Execute("fibrils3Ddisp(" +num2str(s3d.num)+", \""+getwavesdatafolder(mat,2)+"\")")
+		Execute("exportgizmo wave=\"testimage\"   ;Spinoidal3DLayout();Spinoidal3DImage(\""+getdatafolder(1)+"testimage\")")
+	endif
+
+	xwave = x
+	ywave = y
+	zwave = z
+	redimension /n=(thickness*s3d.num*s3d.num) xwave, ywave, zwave
+	rmat[][0] = xwave[p]
+	rmat[][1] = ywave[p]
+	rmat[][2] = zwave[p]
+	variable testcx,testcy,testcz,i,radius, orad, cx, cy, cz, failed, fnum =0, f2num=0, xmn,xmx,ymn,ymx,zmn,zmx, loc, qfnum=0, theta, phi
+	variable tx,ty,tz,hit, mx=thickness-1, my=s3d.num-1, mz=s3d.num-1, length, shellwidth
+	fnum=0
+
+    # make vec and tvec (1x3 wave)
+	make /o /n=3 vec, tvec
+
+    # loop through number of fibrils
+	for(i=0;i<fibrilnum;i+=1)
+        # calculate a radius of a fibril
+		radius=max(1,gnoise(pd)+s3d.size)
+
+        # calculate the width of shell based on %
+		shellwidth = shellwidpct * radius
+		
+		tempx = exmat[p][q][r][ceil(radius)]
+
+		duplicate /o tempx, tempwave
+		redimension /n=(numpnts(tempwave)) tempwave
+		integrate tempwave /D=intwave
+		if(wavemax(intwave) < 5)
+			fnum+=1
+			if(fnum<5)
+				continue
+			else
+				print "warning:  can't fit in anymore fibrils, only " + num2str(i-fnum) + " fibrils were created"
+				break
+			endif
+		endif
+		loc = binarysearch(intwave, enoise(wavemax(intwave)/2)+wavemax(intwave)/2)
+		
+		cx = rmat[loc][0]
+		cy = rmat[loc][1]
+		cz = rmat[loc][2]
+		
+        # gnoise is gaussian distribution of noise (argument is sigma)
+        # theta is 90 + noise
+		theta = (90 + gnoise(angsigma)) * pi / 180 // polar angle of the fibril axis relative to the film normal (right now it is mostly in plane)
+		phi = enoise(pi)  // (azimuthal angle of the axis of the fibril) # 0 to pi
+        # vector is direction of fibril???
+		vec[2] = sin(theta)*cos(phi) 
+		vec[1] = sin(theta)*sin(phi)
+		vec[0] = cos(theta)
+		
+        # if alignment is perpendicular
+		if(type) // perpindicular type, where alignment is perpindicular (random) relative to the fibril axis
+		
+            # enoise is uniform distribution of noise from 0 to pi?
+			variable randth = enoise(pi) + pi # random theta value from pi to 2pi
+			variable randph = enoise(pi/2) + pi/2 # random phi value from pi/2 to pi
+			
+			string normvs = normvecs(vec[0],vec[1],vec[2],rand=1)
+			
+			tvec[0] = str2num(stringfromlist(0,normvs,","))
+			tvec[1] = str2num(stringfromlist(1,normvs,","))
+			tvec[2] = str2num(stringfromlist(2,normvs,","))
+
+        # if alignment is parallel
+		else
+			// normal type, where alignment is the same direction of the fibril axis
+			tvec[0] = vec[0] # tvec 
+			tvec[1] = vec[1]
+			tvec[2] = vec[2]
+		endif
+		// for Micelles, change the above angles, so that they are oriented how you want in the plane (right now they are largely in-plane)
+		
+		
+		//forward direction
+        # did the fibril hit something?
+		hit=0
+        # length of fibril
+		length=0
+        # Center of fibril
+        # cxyz: ======*====== where * = cxyz
+        # tx is current center location
+		tx=cx // center location
+		ty=cy
+		tz=cz
+
+        # grow fibril in the forward direction
+		do
+
+            # max(tx-radius,0)  -> get x location - radius (check if doesn't go out of bounds)
+            # min(tx+radius,mx) -> get x location + radius (check if doesn't go out of bounds)
+            # ammat[tx-rad:tx+rad][ty-rad:ty+rad][tz-rad,tz+rad] the bounding box of a sphere around tx with radius rad
+			#
+            # (p-tx)^2+(q-ty)^2+(r-tz)^2 <= (radius-shellwidth)^2 ? -> filling the inner radius sphere with 1 (fibril)	
+			# ammat[p][q][r]==0 && ((p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius)^2) ? tvec[t] : vecmat
+			# ammat[p][q][r]==1 ? 0 : vecmat
+			#
+			#
+			#
+			#
+            # align shell
+			if(shellalignment>0)
+
+				ammat[ max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)]   = (p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius-shellwidth)^2 ? 1 : ammat
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][] = ammat[p][q][r]==0 && ((p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius)^2) ? tvec[t] : vecmat
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][] = ammat[p][q][r]==1 ? 0 : vecmat
+			
+			# align core
+            elseif(shellalignment<0) // only the core is aligned
+                
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][]= ((p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius-shellwidth)^2) ? tvec[t] : vecmat
+				ammat [max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)]  = ((p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius)^2  ) && ( (p-tx)^2 + (q-ty)^2 + (r-tz)^2 > (radius-shellwidth)^2 )  ? 1 : ammat
+				
+				# error here where both amorphous and aligned material is in the core region... need to erase unaligned shell ammat where aligned core is non negative
+				ammat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)]= vecmat[p][q][r][0]^2 + vecmat[p][q][r][1]^2 + vecmat[p][q][r][2]^2 > 0 ? 0 : ammat
+			
+			# align both core and shell
+            else
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][]= (p-tx)^2 + (q-ty)^2 + (r-tz)^2 < (radius)^2 ? tvec[t] : vecmat
+			endif
+			
+			exmat[max(tx-radius-maxsize,0),min(tx+radius+maxsize,mx)][max(ty-radius-maxsize,0),min(ty+radius+maxsize,my)][max(tz-radius-maxsize,0),min(tz+radius+maxsize,mz)][]= (p-tx)^2 + (q-ty)^2 + (r-tz)^2 < (radius+t)^2 ? 0 : exmat
+			
+            # Travel along fibril 
+            tx += vec[0]
+			ty += vec[1]
+			tz += vec[2]
+			hit = 1-tempx[Min(max(tx,0),mx)][Min(max(ty,0),my)][Min(max(tz,0),mz)]
+			length +=1
+		while( length<maxlength &&  hit==0 && tx <= mx && ty <= my && tz <= mz && tx>=0 && ty>=0 && tz>=0 )
+
+		//other direction
+		hit=0
+		tx=cx
+		ty=cy
+		tz=cz
+		length-=1
+        # grow fibril in other direction!
+		do
+			if(shellalignment>0)
+                
+				ammat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)]= (p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius-shellwidth)^2 ? 1 : ammat
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][]= ammat[p][q][r]==0 && ((p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius)^2 ) ? tvec[t] : vecmat
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][]= ammat[p][q][r]==1 ? 0 : vecmat
+			
+            elseif(shellalignment<0) // only the core is aligned
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][]= ((p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius-shellwidth)^2) ? tvec[t] : vecmat
+				ammat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)]= ( (p-tx)^2 + (q-ty)^2 + (r-tz)^2 <= (radius)^2  ) && ( (p-tx)^2 + (q-ty)^2 + (r-tz)^2 > (radius-shellwidth)^2 )  ? 1 : ammat
+				// error here where both amorphous and aligned material is in the core region... need to erase unaligned shell ammat where aligned core is non negative
+				ammat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)]= vecmat[p][q][r][0]^2 + vecmat[p][q][r][1]^2 + vecmat[p][q][r][2]^2 > 0 ? 0 : ammat
+			else
+				vecmat[max(tx-radius,0),min(tx+radius,mx)][max(ty-radius,0),min(ty+radius,my)][max(tz-radius,0),min(tz+radius,mz)][]= (p-tx)^2 + (q-ty)^2 + (r-tz)^2 < (radius)^2 ? tvec[t] : vecmat
+			endif
+			
+			exmat[max(tx-radius-maxsize,0),min(tx+radius+maxsize,mx)][max(ty-radius-maxsize,0),min(ty+radius+maxsize,my)][max(tz-radius-maxsize,0),min(tz+radius+maxsize,mz)][]= (p-tx)^2 + (q-ty)^2 + (r-tz)^2 < (radius+t)^2 ? 0 : exmat
+			tx -= vec[0]
+			ty -= vec[1]
+			tz -= vec[2]
+			// we are traveling along the vec direction, for type two fibril, you would have to add another vector 90 degrees from this.  still use vec for propogation, use the other for the crystal orientation.
+			
+			hit = 1-tempx[Min(max(tx,0),mx)][Min(max(ty,0),my)][Min(max(tz,0),mz)] // if we hit another fibril or the edge, tempx will be 0 (hit will be 1)  -  until then, hit will equal 0
+			length+=1
+		while( length<maxlength && hit==0 && tx <= mx && ty <= my && tz <= mz && tx>=0 && ty>=0 && tz>=0 )
+
+		mat = sqrt( vecmat[p][q][r][0]^2 + vecmat[p][q][r][1]^2 + vecmat[p][q][r][2]^2 + ammat[p][q][r])
+		imagefilter /n=3 /o gauss3d, mat
+		if(s3d.movie)
+			execute("ModifyGizmo /n=fibrils3D update=2")
+			doupdate
+			Execute "exportgizmo wave=\"testimage\"   "
+			//TextBox/w=Spinoidal3DLayout/C/N=text0/A=LT/X=0.00/Y=0.00 "\Z32" + time2str2(ttot)
+			doupdate
+			savepict /p=_PictGallery_ /E=-5 /N=Spinoidal3DLayout /o as "Frame3D"
+			addmovieframe /pict=Frame3D
+		endif
+		
+		if(length < minlength)
+			//print "Created a fibril too short"
+			f2num+=1
+		endif
+		
+		if(f2num>5 + i/10) // if ever more than 10% + 5 are short, then lets stop
+			print "too many short fibrils have been created, ending fibril creation"
+			break
+		endif
+		
+	endfor
+	if(interpenetration > 1)
+		mat = vecmat[p][q][r][0]
+		imagefilter /n=(interpenetration) /o gauss3d, mat
+		vecmat[][][][0] = mat[p][q][r]
+		mat = vecmat[p][q][r][1]
+		imagefilter /n=(interpenetration) /o gauss3d, mat
+		vecmat[][][][1] = mat[p][q][r]
+		mat = vecmat[p][q][r][2]
+		imagefilter /n=(interpenetration) /o gauss3d, mat
+		vecmat[][][][2] = mat[p][q][r]
+	endif
+	mat = vecmat[p][q][r][0]^2 + vecmat[p][q][r][1]^2 + vecmat[p][q][r][2]^2 + ammat[p][q][r]
+	vecmat = mat[p][q][r]>1 ? vecmat[p][q][r][t] / mat[p][q][r] : vecmat
+	ammat = mat[p][q][r]>1 ? ammat[p][q][r]/mat[p][q][r] : ammat
+	mat = vecmat[p][q][r][0]^2 + vecmat[p][q][r][1]^2 + vecmat[p][q][r][2]^2 + ammat[p][q][r]
+	
+	setdatafolder ::
+	variable fibrilvol = mean(mat)
+	variable rhomatrix = (volfrac - fibrilvol)/(1-fibrilvol)
+	if(rhomatrix < 0 )
+		print "Volume fraction is too low, make less fibrils"
+		return -1
+	endif
+	make /n=(thickness,s3d.num,s3d.num,4) /o m1=0, m2=0
+	wave s3d.m1=m1, s3d.m2=m2
+	s3d.m1[][][][0,2] = vecmat[p][q][r][t]
+	s3d.m1[][][][3] = rhomatrix * (1-mat[p][q][r]) + ammat[p][q][r]// noticed an error where mat can be more than 1, need normalizing before this step
+	s3d.m2[][][][3] = (1-rhomatrix) * (1-mat[p][q][r])
+	
+	duplicate /o mat,s3d.density1 // this returns the density matrix of material 1 (the matrix) for alignment etc later on
+	duplicate /o mat,s3d.density2 // this returns the density matrix of material 2 (the matrix) for alignment etc later on
+	s3d.density2  = 1 - s3d.density1
+end
