@@ -237,39 +237,6 @@ class Morphology:
 
             self.fibrils.append(fibril)
 
-    # def voxelize_model(self):
-    #     """ Voxelize morphology """
-    #     print(f'Voxelizing {len(self.fibrils)} fibrils. This might take a few minutes...')
-    #     indices = np.array([[0,0,0]], dtype=int)
-    #     for fibril in self.fibrils:
-    #         fibril.make_voxelized_fibril_mesh()
-    #         indices = np.append(indices, np.array(fibril.voxel_mesh.vertices, dtype=int),axis=0)
-    #     print('Creating voxel box')
-    #     indices  = [index for index in indices if index[0] < self.x_dim and index[1] < self.y_dim and index[2] < self.z_dim]
-    
-    #     voxel_box = np.zeros((self.x_dim, self.y_dim, self.z_dim))
-    #     for index in indices:
-    #         voxel_box[tuple(index)] = 1
-
-    # def make_numpy_array(self):
-    #     indices = np.array([[0,0,0]], dtype=int)
-    #     for fibril in self.fibrils:
-    #         indices = np.append(indices, np.array(fibril.voxel_mesh.vertices, dtype=int),axis=0)
-    #     indices  = [index for index in indices if index[0] < self.x_dim and index[1] < self.y_dim and index[2] < self.z_dim]
-    
-    #     for index in indices:
-    #         self.voxel_box[tuple(index)] = 1
-
-    # def make_orientation_matrix(self):
-    #     for fibril in self.fibrils:
-    #         indices = np.append(indices, np.array(fibril.voxel_mesh.vertices, dtype=int),axis=0)
-    #     for index in indices:
-    #         self.orientation_box(tuple)    
-
-    # def get_numpy_array(self):
-    #     return self.voxel_box
-
-
     def voxelize_model(self):
         for fibril in self.fibrils:
             fibril.make_voxelized_fibril_mesh()
