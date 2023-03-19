@@ -26,7 +26,11 @@ class Fibril:
         self.rotation_matrix = None
 
         # will be 3D vector of orientation of each voxel
-        # self.orientation = None
+        self.orientation_theta = 0
+        self.orientation_psi = 0
+        self.set_random_orientation()
+        # self.orientation = self.get_random_orientation()
+        # self.color = self.get_color_from_orientation()
 
         self.intersection_mesh = None
         self.fibril_mesh       = None
@@ -34,6 +38,25 @@ class Fibril:
         self.voxel_mesh        = None
 
         self.make_intersection_mesh()
+
+    def set_random_orientation(self):
+        orientation = np.random.random(3)
+        orientation /= np.linalg.norm(orientation)
+        self.orientation_theta = np.arccos(orientation[2])
+        self.orientation_psi = np.arctan2(orientation[1], orientation[0])
+
+    # def get_random_orientation(self):
+    #     orientation = np.random.random(3)
+    #     orientation /= np.linalg.norm(orientation)
+    #     return orientation
+    
+    # def get_color_from_orientation(self):
+    #     theta = np.arccos(self.orientation[2])
+    #     psi = np.arctan2(self.orientation[1], self.orientation[0])
+    #     r = np.sin(theta)*np.cos(psi)
+    #     g = np.sin(theta)*np.sin(psi)
+    #     b = np.cos(theta)
+    #     return np.array([r, g, b])
     
     def transform_mesh(self, mesh, current_direction: np.ndarray(shape=3), override=False):
         """ Rotate given mesh from current_direction to self.direction and translate mesh to center.
@@ -125,8 +148,8 @@ class Fibril:
 
         self.volume = self.fibril_mesh.volume
 
-    def make_voxelized_fibril_mesh(self, pitch_nm: float):
-        self.voxel_grid = self.fibril_mesh.voxelized(pitch=pitch_nm).fill()
+    def make_voxelized_fibril_mesh(self):
+        self.voxel_grid = self.fibril_mesh.voxelized(pitch=1).fill()
         self.voxel_mesh = self.voxel_grid.as_boxes()
         self.voxel_volume = self.voxel_mesh.volume
         # print(f'Voxel vvol: {self.voxel_volume}')
