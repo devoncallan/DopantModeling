@@ -46,6 +46,23 @@ class Morphology:
         self.initialize_box()
         
         self.fibrils = []
+
+        # Material 1 - Crystalline P3HT
+        self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+
+        # Material 2 - Amorphous P3HT
+        self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+
+
+        # self.mat1 = -1*np.ones((self.x_dim, self.y_dim, self.z_dim))
+        # self.mat1_S = np.zeros((self.x_dim, self.y_dim, self.z_dim, 3))
+
         
 
     def initialize_box(self):
@@ -212,7 +229,6 @@ class Morphology:
             fibril = self.grow_fibril(fibril, -1) # Grow fibril to the right
 
             fibril.make_fibril_mesh()
-            fibril.make_voxelized_fibril_mesh(pitch_nm=self.pitch_nm)
 
             print(f'-- Fibril {i} --')
             # print(f'Mesh  volume: {fibril.volume}')
@@ -220,6 +236,57 @@ class Morphology:
             # print(f'Difference (%): {np.abs(fibril.voxel_volume - fibril.volume)/fibril.volume*100}')
 
             self.fibrils.append(fibril)
+
+    # def voxelize_model(self):
+    #     """ Voxelize morphology """
+    #     print(f'Voxelizing {len(self.fibrils)} fibrils. This might take a few minutes...')
+    #     indices = np.array([[0,0,0]], dtype=int)
+    #     for fibril in self.fibrils:
+    #         fibril.make_voxelized_fibril_mesh()
+    #         indices = np.append(indices, np.array(fibril.voxel_mesh.vertices, dtype=int),axis=0)
+    #     print('Creating voxel box')
+    #     indices  = [index for index in indices if index[0] < self.x_dim and index[1] < self.y_dim and index[2] < self.z_dim]
+    
+    #     voxel_box = np.zeros((self.x_dim, self.y_dim, self.z_dim))
+    #     for index in indices:
+    #         voxel_box[tuple(index)] = 1
+
+    # def make_numpy_array(self):
+    #     indices = np.array([[0,0,0]], dtype=int)
+    #     for fibril in self.fibrils:
+    #         indices = np.append(indices, np.array(fibril.voxel_mesh.vertices, dtype=int),axis=0)
+    #     indices  = [index for index in indices if index[0] < self.x_dim and index[1] < self.y_dim and index[2] < self.z_dim]
+    
+    #     for index in indices:
+    #         self.voxel_box[tuple(index)] = 1
+
+    # def make_orientation_matrix(self):
+    #     for fibril in self.fibrils:
+    #         indices = np.append(indices, np.array(fibril.voxel_mesh.vertices, dtype=int),axis=0)
+    #     for index in indices:
+    #         self.orientation_box(tuple)    
+
+    # def get_numpy_array(self):
+    #     return self.voxel_box
+
+
+    def voxelize_model(self):
+        for fibril in self.fibrils:
+            fibril.make_voxelized_fibril_mesh()
+            indices = np.array(fibril.voxel_mesh.vertices, dtype=int)
+            for index in indices:
+                index = np.flip(index)
+                if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
+                    self.mat1_Vfrac[tuple(index)] = 1
+                    self.mat1_S[tuple(index)] = 1
+                    self.mat1_theta[tuple(index)] = fibril.orientation_theta
+                    self.mat1_psi[tuple(index)] = fibril.orientation_psi
+        self.mat2_Vfrac = 1 - self.mat1_Vfrac  
+
+
+                    # self.voxel_box[tuple(index)] = 1
+                    # fibril.color = fibril.get_color_from_orientation()
+                    # self.orientation_box[tuple(index)] = fibril.color
 
     def get_scene(self, show_voxelized=False, show_bounding_box=False):
 
