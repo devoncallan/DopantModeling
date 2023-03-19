@@ -148,7 +148,11 @@ class Fibril:
 
         self.volume = self.fibril_mesh.volume
 
+<<<<<<< HEAD
     def make_voxelized_fibril_mesh(self):
+=======
+    def make_voxelized_fibril_mesh(self, pitch_nm: float):
+>>>>>>> 15085b1047ea41e264d0356ec880ee7719a6e354
         self.voxel_grid = self.fibril_mesh.voxelized(pitch=1).fill()
         self.voxel_mesh = self.voxel_grid.as_boxes()
         self.voxel_volume = self.voxel_mesh.volume
