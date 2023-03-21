@@ -47,9 +47,9 @@ class Fibril:
         self.orientation_psi = np.arctan2(orientation[1], orientation[0])
 
         # Map orientation angles to rgb colorspace
-        r = np.sin(theta)*np.cos(psi)
-        g = np.sin(theta)*np.sin(psi)
-        b = np.cos(theta)
+        r = np.sin(self.orientation_theta)*np.cos(self.orientation_psi)
+        g = np.sin(self.orientation_theta)*np.sin(self.orientation_psi)
+        b = np.cos(self.orientation_theta)
         self.color = np.array([r, g, b])
     
     def transform_mesh(self, mesh, current_direction: np.ndarray(shape=3), override=False):
