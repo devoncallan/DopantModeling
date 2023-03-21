@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import trimesh
 from Fibril import Fibril
 import copy
@@ -52,6 +53,7 @@ class Morphology:
         self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
 
         # Material 2 - Amorphous P3HT
         self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
@@ -239,7 +241,11 @@ class Morphology:
 
     def voxelize_model(self):
         for fibril in self.fibrils:
-            fibril.make_voxelized_fibril_mesh()
+            fibril.make_voxelized_fibril_mesh() 
+
+    def create_material_matrices (self):
+        self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 4))
+        for fibril in self.fibrils:
             indices = np.array(fibril.voxel_mesh.vertices, dtype=int)
             for index in indices:
                 index = np.flip(index)
@@ -248,12 +254,8 @@ class Morphology:
                     self.mat1_S[tuple(index)] = 1
                     self.mat1_theta[tuple(index)] = fibril.orientation_theta
                     self.mat1_psi[tuple(index)] = fibril.orientation_psi
+                    self.mat1_orientation[tuple(index)] = [fibril.color[0], fibril.color[1], fibril.color[2], 1]
         self.mat2_Vfrac = 1 - self.mat1_Vfrac  
-
-
-                    # self.voxel_box[tuple(index)] = 1
-                    # fibril.color = fibril.get_color_from_orientation()
-                    # self.orientation_box[tuple(index)] = fibril.color
 
     def get_scene(self, show_voxelized=False, show_bounding_box=False):
 
@@ -267,6 +269,15 @@ class Morphology:
         if show_bounding_box:
             scene_mesh_list.append(self.bounding_path)
         return trimesh.Scene(scene_mesh_list)
+    
+    def get_morphology_movie(self):
+        fig = plt.figure(dpi=300)
+        def update_fig(i):
+            fig.clear()
+            plt.imshow(self.mat1_orientation[i,:,:,:])
+        anim = animation.FuncAnimation(fig, update_fig, self.z_dim)
+        anim.save("Morphology.mp4", fps=16)
+        plt.close()
 
     def analyze_crystallinity(self):
         return None
