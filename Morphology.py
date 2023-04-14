@@ -48,23 +48,20 @@ class Morphology:
         
         self.fibrils = []
 
-        # Material 1 - Crystalline P3HT
+        # Material 1 - P3HT
         self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+
+        # Stores RGB values at each voxel (for morphology movie)
         self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
 
-        # Material 2 - Amorphous P3HT
+        # Material 2 - Vacuum 
         self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-
-
-        # self.mat1 = -1*np.ones((self.x_dim, self.y_dim, self.z_dim))
-        # self.mat1_S = np.zeros((self.x_dim, self.y_dim, self.z_dim, 3))
-
         
 
     def initialize_box(self):
@@ -75,13 +72,6 @@ class Morphology:
         # Each xyz coordinate contains (material, x_orientation, y_orientation, z_orientation)
         self.box = np.zeros((self.x_dim, self.y_dim, self.z_dim, 4))
 
-        # Store material information for each voxel 
-        self.material_box    = np.zeros((self.x_dim, self.y_dim, self.z_dim, self.num_materials))
-        # Store orientation information for each voxel
-        # ??? Maybe modified later to include fraction of material is oriented???
-        # ??? self.box = np.zeros((self.x_dim, self.y_dim, self.z_dim, self.num_materials, 3)) ???
-        self.orientation_box = np.zeros((self.x_dim, self.y_dim, self.z_dim, 3))
-        
         # Set up bounding box mesh to detect out of bounds collisions
         self.bounding_box = trimesh.primitives.Box(extents=[self.x_dim, self.y_dim, self.z_dim])
         
@@ -243,6 +233,10 @@ class Morphology:
         for fibril in self.fibrils:
             fibril.make_voxelized_fibril_mesh() 
 
+    def set_fibril_orientations(self):
+        for i in range(len(self.fibrils)):
+            self.fibrils[i].set_random_orientation()
+
     def create_material_matrices (self):
         self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 4))
         for fibril in self.fibrils:
@@ -282,14 +276,3 @@ class Morphology:
     def analyze_crystallinity(self):
         return None
 
-
-# gnoise is gaussian distribution of noise (argument is sigma)
-# theta is 90 + gaussian noise, average should be 90deg (angsigma is std)
-# theta = (90 + gnoise(angsigma)) * pi / 180 // polar angle of the fibril axis relative to the film normal (right now it is mostly in plane)
-
-# phi is 0 to pi
-# phi = enoise(pi)  // (azimuthal angle of the axis of the fibril)
-# vector is direction of fibril???
-# vec[2] = sin(theta)*cos(phi) 
-# vec[1] = sin(theta)*sin(phi)
-# vec[0] = cos(theta)
