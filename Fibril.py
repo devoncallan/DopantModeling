@@ -41,8 +41,10 @@ class Fibril:
     def set_random_orientation(self):
 
         # Generate a random orientation vector
-        orientation = np.random.random(3)
-        orientation /= np.linalg.norm(orientation)
+        # orientation = np.random.random(3)
+        # orientation = np.cross(self.direction, np.random.random(3))
+        # orientation /= np.linalg.norm(orientation)
+        orientation = self.direction
         self.orientation_theta = np.arccos(orientation[2])
         self.orientation_psi = np.arctan2(orientation[1], orientation[0])
 
@@ -86,6 +88,7 @@ class Fibril:
         return mesh
 
     def make_tapered_cylinder_mesh(self):
+        #https://stackoverflow.com/questions/53999426/how-to-parameterize-a-curved-cylinder
         N = 64  # Number of vertices along midline
         N_taper = int(N / 4)  # Number of points to taper at the ends
         shape_k1 = 1.  # Changes shape at midpoint
@@ -147,15 +150,3 @@ class Fibril:
         self.voxel_mesh = self.voxel_grid.as_boxes()
         self.voxel_volume = self.voxel_mesh.volume
         # print(f'Voxel vvol: {self.voxel_volume}')
-
-        
-class TypeOneFibril(Fibril):
-    # Core-shell angle directed certain way
-
-    def __init__():
-        return None
-
-class TypeTwoFibril(Fibril):
-
-    def __init__():
-        return None

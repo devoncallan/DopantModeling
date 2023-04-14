@@ -2,5 +2,6 @@
 .ipynb_checkpoints/
 .vscode/
 __pycache__/
-
-
+Voxelized Models/
+HDF5/
+Morphology.mp4
