@@ -47,21 +47,26 @@ class Morphology:
         self.initialize_box()
         
         self.fibrils = []
+        self.mat_Vfrac       = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        self.mat_S           = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        self.mat_theta       = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        self.mat_psi         = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        self.mat_orientation = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim, 3))
+        
+        # # Material 1 - P3HT
+        # self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
 
-        # Material 1 - P3HT
-        self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # # Stores RGB values at each voxel (for morphology movie)
+        # self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
 
-        # Stores RGB values at each voxel (for morphology movie)
-        self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
-
-        # Material 2 - Vacuum 
-        self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # # Material 2 - Vacuum 
+        # self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         
 
     def initialize_box(self):
