@@ -52,16 +52,23 @@ class ReducedMorphology:
         
     def generate_material_matricies(self):
 
-        mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
 
-        mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         
+        mat_Vfrac       = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        mat_S           = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        mat_theta       = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        mat_psi         = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
+        mat_orientation = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim, 3))
+
+        # Assumes mat1 is the primary fibril material
         for fibril in self.fibrils:
             fibril_indices = fibril.fibril_indices
             fibril.set_fibril_orientation()
@@ -69,11 +76,13 @@ class ReducedMorphology:
                 # Convert XYZ to ZYX convention
                 index = np.flip(index)
                 if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
-                    mat1_Vfrac[tuple(index)] = 1
-                    mat1_S[tuple(index)]     = 1
-                    mat1_theta[tuple(index)] = fibril.orientation_theta
-                    mat1_psi[tuple(index)]   = fibril.orientation_psi
-        mat2_Vfrac = 1 - mat1_Vfrac
+                    mat_Vfrac[tuple(0,index)] = 1
+                    mat_S[tuple(0,index)]     = 1
+                    mat_theta[tuple(0,index)] = fibril.orientation_theta
+                    mat_psi[tuple(0,index)]   = fibril.orientation_psi
 
-        return mat1_Vfrac, mat1_S, mat1_theta, mat1_psi, mat2_Vfrac, mat2_S, mat2_theta, mat2_psi
+                    
+        mat_Vfrac[1,:,:,:] = 1 - mat_Vfrac[0,:,:,:]
+        # Matrices have indeces of (mat#-1, z, y, x)
+        return mat_Vfrac, mat_S, mat_theta, mat_psi
         
