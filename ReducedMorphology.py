@@ -43,7 +43,8 @@ class ReducedMorphology:
         self.y_dim = int(round(self.y_dim_nm / self.pitch_nm))
         self.z_dim = int(round(self.z_dim_nm / self.pitch_nm))
         self.dims  = np.array([self.x_dim, self.y_dim, self.z_dim])
-
+        self.num_materials = m.num_materials
+        
         self.fibrils = []
 
         for fibril in m.fibrils:
