@@ -77,10 +77,10 @@ class ReducedMorphology:
                 # Convert XYZ to ZYX convention
                 index = np.flip(index)
                 if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
-                    mat_Vfrac[tuple(0,index)] = 1
-                    mat_S[tuple(0,index)]     = 1
-                    mat_theta[tuple(0,index)] = fibril.orientation_theta
-                    mat_psi[tuple(0,index)]   = fibril.orientation_psi
+                    mat_Vfrac[0][tuple(index)] = 1
+                    mat_S[0][tuple(index)]     = 1
+                    mat_theta[0][tuple(index)] = fibril.orientation_theta
+                    mat_psi[0][tuple(index)]   = fibril.orientation_psi
 
                     
         mat_Vfrac[1,:,:,:] = 1 - mat_Vfrac[0,:,:,:]
