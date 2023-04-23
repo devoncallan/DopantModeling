@@ -67,7 +67,7 @@ class ReducedMorphology:
         mat_S           = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
         mat_theta       = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
         mat_psi         = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim))
-        mat_orientation = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim, 3))
+        # mat_orientation = np.zeros((self.num_materials,self.z_dim,self.y_dim,self.x_dim, 3))
 
         # Assumes mat1 is the primary fibril material
         for fibril in self.fibrils:
@@ -82,7 +82,7 @@ class ReducedMorphology:
                     mat_theta[0][tuple(index)] = fibril.orientation_theta
                     mat_psi[0][tuple(index)]   = fibril.orientation_psi
 
-                    
+        # Matrices for non-fibril material:
         mat_Vfrac[1,:,:,:] = 1 - mat_Vfrac[0,:,:,:]
         # Matrices have indeces of (mat#-1, z, y, x)
         return mat_Vfrac, mat_S, mat_theta, mat_psi
