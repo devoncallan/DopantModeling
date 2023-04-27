@@ -86,4 +86,3 @@ class ReducedMorphology:
         mat_Vfrac[1,:,:,:] = 1 - mat_Vfrac[0,:,:,:]
         # Matrices have indeces of (mat#-1, z, y, x)
         return mat_Vfrac, mat_S, mat_theta, mat_psi
-        
