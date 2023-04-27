@@ -10,10 +10,11 @@
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --time=12:00:00
+
 cd $SLURM_SUBMIT_DIR
 export PATH=/home/maxgruschka/anaconda3/envs/nrss/bin/python:$PATH
-conda activate nrss
-mkdir -p $SLURM_JOB_ID
+
+mkdir -p "${SLURM_JOB_ID}-HD_and_Plot"
 cd $SLURM_JOB_ID
 
 # Run the program
