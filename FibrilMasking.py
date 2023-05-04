@@ -20,7 +20,6 @@ from ReducedMorphology import ReducedMorphology
 import sys
 import pathlib
 
-
 import subprocess
 import h5py
 
@@ -38,27 +37,37 @@ import numpy as np
 import io
 from PIL import Image
 import PIL
-
+import opensimplex as simplex
 #%% System Setup
 sys.path.append('/home/maxgruschka/NRSS/')
 
+def generate_Matrix_Heights(height, width, feature_size, max_val):
+    matrix = np.zeros((height,width))
+    for x in range(width):
+        for y in range(height):
+            matrix[x,y] = int(np.round(max_val/2 * (simplex.noise2(x/feature_size,y/feature_size)+1)))
+    return matrix
 #%% Create the morphology/run parameters
 # Declare model box size in nm (x,y,z)
-x_dim_nm  = 1028
-y_dim_nm  = 1028
+x_dim_nm  = 2056
+y_dim_nm  = 2056
 z_dim_nm  = 128
 pitch_nm = 2 # Dimension of voxel in nm
+heightFeature = 3 # Approximate width of height noise features (3 means features average 1/3 of box width)
+max_valley_nm = 36
+max_valley = int max_valley_nm/pitch_nm)
 # uniformDopant_Flag = True
 amorph_matrix_vfrac = 0.9
 
 # Initialize morphology
 # Chosen Parameters:
 num_materials = 2
-r_nm_avg = 12
-r_nm_std = 3
-num_fibrils = 50
-fib_length_nm_range = [100,400]
+r_nm_avg = 8
+r_nm_std = 2
+num_fibrils = 200
+fib_length_nm_range = [100,500]
 energies = np.round(np.arange(280., 300., 0.1),1) # Energies for CyRSoXs (init,fin,step) (eV)
+surface_roughness = True
 
 
 morphology = Morphology(x_dim_nm, y_dim_nm, z_dim_nm, pitch_nm, num_materials)
@@ -68,26 +77,44 @@ morphology.set_model_parameters(radius_nm_avg = r_nm_avg,
                                 fibril_length_range_nm = fib_length_nm_range)
 
 morphology.fill_model()
-
+print("filled")
 # May not show if the morphology is too large (too many fibrils)
 # scene = morphology.get_scene(show_bounding_box=True)
 # scene.show()
 morphology.voxelize_model()
 # sceneVoxel = morphology.get_scene(show_bounding_box=True,show_voxelized=True)
-
+print("voxelized")
 rmorphology = ReducedMorphology(morphology)
+print("reduced")
 # Generate material matricies
 mat_Vfrac, mat_S, mat_theta, mat_psi = rmorphology.generate_material_matricies()
-
-
 # Change material 1 matricies
 
-mat_Vfrac[0] = amorph_matrix_vfrac*np.ones_like(mat_Vfrac[0]) + (1-amorph_matrix_vfrac)*mat_Vfrac[0] # creates a matrix with Vfrac of mat1 = f2 everywhere, but 1 where fibrils are
-mat_Vfrac[0] = gaussian_filter(mat_Vfrac[0],  1) # Apply a gaussian filter to the above
-mat_S[0]     = gaussian_filter(0.75*mat_S[0], 1) # Apply Gaussian filter to array with 0.75 wherever the fibrils are
-
-# mat1_theta = gaussian_filter(mat1_theta,  0) # I don't think we want to adjust the angles like this- 
-# mat1_psi   = gaussian_filter(mat1_psi,    0) # this points them towards z = 0, which doens't make sense
+if surface_roughness:
+    print("Starting roughness matrices/calculations")
+    amorph_Mat = np.zeros_like(mat_Vfrac[0]) #zyx notation already
+    height_Map = generate_Matrix_Heights(morphology.y_dim,morphology.x_dim, heightFeature,max_valley)
+    full_levels = [round(x) for x in range(round(morphology.z_dim-height_Map.max()))]
+    amorph_Mat[full_levels][:,:] = amorph_matrix_vfrac #zyx notation
+    for x in range(morphology.x_dim):
+        for y in range(morphology.y_dim):
+            for z in range(round(morphology.z_dim-height_Map.max()), int(morphology.z_dim)):
+                if z <= (morphology.z_dim - height_Map[x,y]):
+                    amorph_Mat[z,y,x] = amorph_matrix_vfrac
+    mat_Vfrac[0] = np.clip(mat_Vfrac[0] + amorph_Mat,0,1)
+    # Calculate roughness:
+    surface = np.zeros((morphology.x_dim,morphology.y_dim))
+    for x in range(morphology.x_dim):
+        for y in range(morphology.y_dim):
+            surface[x,y] = max(np.nonzero(mat_Vfrac[0][:,y,x])[0])
+    #Roughness calcs: https://www.olympus-ims.com/en/metrology/surface-roughness-measurement-portal/parameters/#!cms[focus]=009
+    rms_Surface = np.sqrt(1/(morphology.x_dim*morphology.y_dim) * ((surface*surface).sum())) #Rq
+    skewness = 1/(rms_Surface**3) * (1/(morphology.x_dim*morphology.y_dim) * ((surface*surface*surface).sum()))
+    print(f"R_q = {rms_Surface}\n Skewness = {skewness}")
+else:
+    mat_Vfrac[0] = amorph_matrix_vfrac*np.ones_like(mat_Vfrac[0]) + (1-amorph_matrix_vfrac)*mat_Vfrac[0] # creates a matrix with Vfrac of mat1 = f2 everywhere, but 1 where fibrils are
+    mat_Vfrac[0] = gaussian_filter(mat_Vfrac[0], 1) # Apply a gaussian filter to the above
+    mat_S[0] = gaussian_filter(0.75*mat_S[0], 1) # Apply Gaussian filter to array with 0.75 wherever the fibrils are
 
 # Change material 2 matricies
 mat_Vfrac[1] = 1 - mat_Vfrac[0]
@@ -104,6 +131,9 @@ energy_dict = {'Energy':6,'DeltaPerp':3, 'BetaPerp':1, 'DeltaPara':2, 'BetaPara'
 write_materials(energies, material_dict, energy_dict, 2)
 write_config(list(energies), [0.0, 0.5, 360.0], CaseType=0, MorphologyType=0)
 
+
+# Run the Cyrsoxs:
+subprocess.run(["CyRSoXS","Fibril.hdf5"])
 #%% Graphing
 basePath = pathlib.Path('.').absolute()
 h5path = pathlib.Path(basePath,'HDF5')
@@ -133,16 +163,19 @@ raw.sel(energy=290).plot(norm=LogNorm(1e-2,1e7),cmap='terrain',ax=ax[1],add_colo
 raw.sel(energy=299).plot(norm=LogNorm(1e-2,1e7),cmap='terrain',ax=ax[2])
 
 [{axes.set_xlim(-0.4,0.4),axes.set_ylim(-0.4,0.4)} for axes in ax]
-plt.savefig("Scattering_3x_E-vals.svg")
+plt.savefig("Scattering_3x_E-vals.png")
 
+fig2,ax2 = plt.subplots(figsize=(3,3), dpi=140, constrained_layout=True)
 # calculate the anisotropy metric
 A = remeshed.rsoxs.AR(chi_width=20)
 
-A.plot(x='q',cmap='bwr_r', vmin=-0.45, vmax=0.45)
-plt.savefig("Anisotropy_low-q.svg")
+A.plot(x='q',cmap='bwr_r', vmin=-0.45, vmax=0.45,ax=ax2)
+ax2.set_xlim(0.01,0.1)
+fig2.savefig("Anisotropy_low-q.png")
 
-A.plot(x='q',cmap='bwr_r')
-plt.xlim(left=0.01, right=1)
-plt.ylim(bottom=280, top=295)
-plt.xscale('log')
-plt.savefig("Anisotropy_high-q.svg")
+fig3,ax3 = plt.subplots(figsize=(3,3), dpi=140, constrained_layout=True)
+A.plot(x='q',cmap='bwr_r',ax=ax3)
+ax3.set_xlim(.01,1)
+ax3.set_ylim(280,295)
+ax3.set_xscale('log')
+fig3.savefig("Anisotropy_high-q.png")
