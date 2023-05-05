@@ -21,7 +21,7 @@ class Morphology:
     """
 
 
-    def __init__(self, x_dim_nm: float, y_dim_nm: float, z_dim_nm: float, pitch_nm: float, num_materials: int):
+    def __init__(self, x_dim_nm: float, y_dim_nm: float, z_dim_nm: float, pitch_nm: float):
         """Initialize morphology object
 
         Args:
@@ -42,26 +42,25 @@ class Morphology:
         self.z_dim = int(round(z_dim_nm / pitch_nm))
         self.box_volume = self.x_dim * self.y_dim * self.z_dim
         self.dims  = np.array([self.x_dim, self.y_dim, self.z_dim])
-        self.num_materials = num_materials
         
         self.initialize_box()
         
         self.fibrils = []
 
-        # Material 1 - P3HT
-        self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # # Material 1 - P3HT
+        # self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
 
-        # Stores RGB values at each voxel (for morphology movie)
-        self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
+        # # Stores RGB values at each voxel (for morphology movie)
+        # self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
 
-        # Material 2 - Vacuum 
-        self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # # Material 2 - Vacuum 
+        # self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        # self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         
 
     def initialize_box(self):
@@ -237,19 +236,19 @@ class Morphology:
         for i in range(len(self.fibrils)):
             self.fibrils[i].set_random_orientation()
 
-    def create_material_matrices (self):
-        self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 4))
-        for fibril in self.fibrils:
-            indices = np.array(fibril.voxel_mesh.vertices, dtype=int)
-            for index in indices:
-                index = np.flip(index)
-                if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
-                    self.mat1_Vfrac[tuple(index)] = 1
-                    self.mat1_S[tuple(index)] = 1
-                    self.mat1_theta[tuple(index)] = fibril.orientation_theta
-                    self.mat1_psi[tuple(index)] = fibril.orientation_psi
-                    self.mat1_orientation[tuple(index)] = [fibril.color[0], fibril.color[1], fibril.color[2], 1]
-        self.mat2_Vfrac = 1 - self.mat1_Vfrac  
+    # def create_material_matrices (self):
+    #     self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 4))
+    #     for fibril in self.fibrils:
+    #         indices = np.array(fibril.voxel_mesh.vertices, dtype=int)
+    #         for index in indices:
+    #             index = np.flip(index)
+    #             if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
+    #                 self.mat1_Vfrac[tuple(index)] = 1
+    #                 self.mat1_S[tuple(index)] = 1
+    #                 self.mat1_theta[tuple(index)] = fibril.orientation_theta
+    #                 self.mat1_psi[tuple(index)] = fibril.orientation_psi
+    #                 self.mat1_orientation[tuple(index)] = [fibril.color[0], fibril.color[1], fibril.color[2], 1]
+    #     self.mat2_Vfrac = 1 - self.mat1_Vfrac  
 
     def get_scene(self, show_voxelized=False, show_bounding_box=False):
 
@@ -264,15 +263,15 @@ class Morphology:
             scene_mesh_list.append(self.bounding_path)
         return trimesh.Scene(scene_mesh_list)
     
-    def get_morphology_movie(self):
-        fig = plt.figure(dpi=300)
-        def update_fig(i):
-            fig.clear()
-            plt.imshow(self.mat1_orientation[i,:,:,:])
-        anim = animation.FuncAnimation(fig, update_fig, self.z_dim)
-        anim.save("Morphology.mp4", fps=16)
-        plt.close()
+    # def get_morphology_movie(self):
+    #     fig = plt.figure(dpi=300)
+    #     def update_fig(i):
+    #         fig.clear()
+    #         plt.imshow(self.mat1_orientation[i,:,:,:])
+    #     anim = animation.FuncAnimation(fig, update_fig, self.z_dim)
+    #     anim.save("Morphology.mp4", fps=16)
+    #     plt.close()
 
-    def analyze_crystallinity(self):
-        return None
+    # def analyze_crystallinity(self):
+    #     return None
 
