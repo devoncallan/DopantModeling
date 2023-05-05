@@ -1,6 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+import pickle
 
 from Fibril import Fibril
 from Morphology import Morphology
@@ -44,36 +43,28 @@ class ReducedMorphology:
         self.z_dim = int(round(self.z_dim_nm / self.pitch_nm))
         self.dims  = np.array([self.x_dim, self.y_dim, self.z_dim])
 
+        # Morphology parameters
+        self.radius_nm_avg = m.radius_nm_avg
+        self.radius_nm_std = m.radius_nm_std
+        self.min_fibril_length_nm = m.min_fibril_length_nm
+        self.max_fibril_length_nm = m.max_fibril_length_nm
+
         self.fibrils = []
 
         for fibril in m.fibrils:
             self.fibrils.append(ReducedFibril(fibril))
+        self.num_fibrils = len(self.fibrils)
 
-        
-    def generate_material_matricies(self):
+    def pickle(self):
 
-        mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
+        dimension_str = str(int(self.x_dim_nm)) + "x" + str(int(self.y_dim_nm)) + "x" + str(int(self.z_dim_nm)) + "nm"
+        pitch_str = "pitch" + str(self.pitch_nm) + "nm"
+        radius_str = "rad" + str(self.radius_nm_avg) + "nm"
+        radius_std_str = "std" + str(self.radius_nm_std) + "nm"
+        num_fibrils_str = str(int(self.num_fibrils)) + "fib"
+        length_str = str(int(self.min_fibril_length_nm)) + "-" + str(int(self.max_fibril_length_nm)) + "nm"
 
-        mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        
-        for fibril in self.fibrils:
-            fibril_indices = fibril.fibril_indices
-            fibril.set_fibril_orientation()
-            for index in fibril_indices:
-                # Convert XYZ to ZYX convention
-                index = np.flip(index)
-                if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
-                    mat1_Vfrac[tuple(index)] = 1
-                    mat1_S[tuple(index)]     = 1
-                    mat1_theta[tuple(index)] = fibril.orientation_theta
-                    mat1_psi[tuple(index)]   = fibril.orientation_psi
-        mat2_Vfrac = 1 - mat1_Vfrac
+        filename = dimension_str + "_" + pitch_str + "_" + radius_str + "_" + radius_std_str + "_" + num_fibrils_str + "_" + length_str + ".pickle"
 
-        return mat1_Vfrac, mat1_S, mat1_theta, mat1_psi, mat2_Vfrac, mat2_S, mat2_theta, mat2_psi
-        
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
