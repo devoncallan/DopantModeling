@@ -1,12 +1,12 @@
 #%% Importing
 
 from scipy.interpolate import interp1d
-from scipy.ndimage import rotate
+from scipy.ndimage import rotate, gaussian_filter
 from sklearn.preprocessing import normalize
-from scipy.ndimage import gaussian_filter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+
 # import trimesh
 import random
 import pickle
@@ -42,20 +42,36 @@ import opensimplex as simplex
 sys.path.append('/home/maxgruschka/NRSS/')
 
 def generate_Matrix_Heights(height, width, feature_size, max_val):
+    """
+    generates a 2D open-simplex based noise matrix
+
+    Parameters:
+    ----------
+        height:
+        width:
+        feature_size: 
+        max_val: 
+    Returns:
+    -------
+        matrix: ndarray
+            a  matrix with values in the range from 0 to max_val. [height,width]
+
+    """
     matrix = np.zeros((height,width))
     for x in range(width):
         for y in range(height):
-            matrix[x,y] = int(np.round(max_val/2 * (simplex.noise2(x/feature_size,y/feature_size)+1)))
+            matrix[x,y] = int(np.round(max_val/2 * (simplex.noise2(x/feature_size,y/feature_size)+1))) #rounded gradient from 0 to max_val with average feature width of feature_size
     return matrix
+
 #%% Create the morphology/run parameters
 # Declare model box size in nm (x,y,z)
-x_dim_nm  = 2056
-y_dim_nm  = 2056
+x_dim_nm  = 1028
+y_dim_nm  = 1028
 z_dim_nm  = 128
 pitch_nm = 2 # Dimension of voxel in nm
 heightFeature = 3 # Approximate width of height noise features (3 means features average 1/3 of box width)
-max_valley_nm = 36
-max_valley = int max_valley_nm/pitch_nm)
+max_valley_nm = 32
+max_valley = int(max_valley_nm/pitch_nm)
 # uniformDopant_Flag = True
 amorph_matrix_vfrac = 0.9
 
@@ -64,9 +80,9 @@ amorph_matrix_vfrac = 0.9
 num_materials = 2
 r_nm_avg = 8
 r_nm_std = 2
-num_fibrils = 200
-fib_length_nm_range = [100,500]
-energies = np.round(np.arange(280., 300., 0.1),1) # Energies for CyRSoXs (init,fin,step) (eV)
+num_fibrils = 15
+fib_length_nm_range = [100,400]
+energies = np.round(np.arange(280., 300., 1),1) # Energies for CyRSoXs (init,fin,step) (eV)
 surface_roughness = True
 
 
@@ -78,9 +94,6 @@ morphology.set_model_parameters(radius_nm_avg = r_nm_avg,
 
 morphology.fill_model()
 print("filled")
-# May not show if the morphology is too large (too many fibrils)
-# scene = morphology.get_scene(show_bounding_box=True)
-# scene.show()
 morphology.voxelize_model()
 # sceneVoxel = morphology.get_scene(show_bounding_box=True,show_voxelized=True)
 print("voxelized")
@@ -93,14 +106,11 @@ mat_Vfrac, mat_S, mat_theta, mat_psi = rmorphology.generate_material_matricies()
 if surface_roughness:
     print("Starting roughness matrices/calculations")
     amorph_Mat = np.zeros_like(mat_Vfrac[0]) #zyx notation already
-    height_Map = generate_Matrix_Heights(morphology.y_dim,morphology.x_dim, heightFeature,max_valley)
-    full_levels = [round(x) for x in range(round(morphology.z_dim-height_Map.max()))]
-    amorph_Mat[full_levels][:,:] = amorph_matrix_vfrac #zyx notation
+    height_Map = generate_Matrix_Heights(morphology.y_dim,morphology.x_dim, int(morphology.x_dim/heightFeature),max_valley)
     for x in range(morphology.x_dim):
         for y in range(morphology.y_dim):
-            for z in range(round(morphology.z_dim-height_Map.max()), int(morphology.z_dim)):
-                if z <= (morphology.z_dim - height_Map[x,y]):
-                    amorph_Mat[z,y,x] = amorph_matrix_vfrac
+            for z in range(round(morphology.z_dim - height_Map[x,y])):
+                amorph_Mat[z,y,x] = amorph_matrix_vfrac
     mat_Vfrac[0] = np.clip(mat_Vfrac[0] + amorph_Mat,0,1)
     # Calculate roughness:
     surface = np.zeros((morphology.x_dim,morphology.y_dim))
@@ -125,7 +135,8 @@ mat_psi[1]   = mat_psi[1]
 write_hdf5([[mat_Vfrac[0,:,:,:], mat_S[0,:,:,:], mat_theta[0,:,:,:], mat_psi[0,:,:,:]], 
             [mat_Vfrac[1,:,:,:], mat_S[1,:,:,:], mat_theta[1,:,:,:], mat_psi[1,:,:,:]]],
             float(pitch_nm), 'Fibril.hdf5')
-checkH5('Fibril.hdf5', z_slice=25, runquiet=True)
+checkH5('Fibril.hdf5', z_slice=0, runquiet=False) # I think it'll save the figs to the working dir for Max's pod setup - had to change an NRSS file
+
 material_dict = {'Material1':'/home/maxgruschka/DopantModeling/P3HT.txt','Material2':'vacuum'}
 energy_dict = {'Energy':6,'DeltaPerp':3, 'BetaPerp':1, 'DeltaPara':2, 'BetaPara':0}  
 write_materials(energies, material_dict, energy_dict, 2)
