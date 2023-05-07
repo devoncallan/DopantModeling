@@ -70,7 +70,7 @@ y_dim_nm  = 1028
 z_dim_nm  = 128
 pitch_nm = 2 # Dimension of voxel in nm
 heightFeature = 3 # Approximate width of height noise features (3 means features average 1/3 of box width)
-max_valley_nm = 32
+max_valley_nm = 46
 max_valley = int(max_valley_nm/pitch_nm)
 # uniformDopant_Flag = True
 amorph_matrix_vfrac = 0.9
@@ -80,9 +80,9 @@ amorph_matrix_vfrac = 0.9
 num_materials = 2
 r_nm_avg = 8
 r_nm_std = 2
-num_fibrils = 15
-fib_length_nm_range = [100,400]
-energies = np.round(np.arange(280., 300., 1),1) # Energies for CyRSoXs (init,fin,step) (eV)
+num_fibrils = 150
+fib_length_nm_range = [100,600]
+energies = np.round(np.arange(280., 300.,0.1),1) # Energies for CyRSoXs (init,fin,step) (eV)
 surface_roughness = True
 
 
