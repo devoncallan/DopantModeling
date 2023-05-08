@@ -14,7 +14,13 @@ AMORPH_ID  = 2 # Amorphous P3HT
 DOPANT_ID  = 3 # Dopant (optional)
 
 ### Post processing parameters
-num_materials = 3
+num_materials = 3 
+dope_type = 0 # 0: no dopant 
+              # 1: uniform random replacing p3ht 
+              # 2: Dopant only in amorph matrix
+              # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
+              # 4: Dopant mostly in amorph, some in fibrils (75/25)
+dopant_frac = 0.0825 #approx total vfrac dopant for normalization
 
 # Core-shell parameters
 core_shell_morphology = True
@@ -33,7 +39,7 @@ def generate_material_matricies(rm: ReducedMorphology):
     mat_theta = np.zeros((num_materials, rm.z_dim, rm.y_dim, rm.x_dim))
     mat_psi   = np.zeros((num_materials, rm.z_dim, rm.y_dim, rm.x_dim))
 
-    # Assumes mat1 is the primary fibril material
+    # Initialize matrices with fibrils
     for fibril in rm.fibrils:
         fibril_indices = fibril.fibril_indices
         fibril.set_fibril_orientation()
@@ -46,10 +52,11 @@ def generate_material_matricies(rm: ReducedMorphology):
                 mat_theta[CRYSTAL_ID][tuple(index)] = fibril.orientation_theta
                 mat_psi[CRYSTAL_ID][tuple(index)]   = fibril.orientation_psi
 
-
+    # Add core-shell
     if core_shell_morphology:
         mat_Vfrac, mat_S, mat_theta, mat_psi = add_fibril_shell(mat_Vfrac, mat_S, mat_theta, mat_psi)
-    
+
+    # Add surface roughness
     if surface_roughness:
         mat_Vfrac, mat_S, mat_theta, mat_psi = add_surface_roughness(rm, mat_Vfrac, mat_S, mat_theta, mat_psi)
     else:
@@ -59,8 +66,8 @@ def generate_material_matricies(rm: ReducedMorphology):
         amorph_Vfrac[amorph_mask] = np.clip(amorph_Vfrac[amorph_mask], 0, 1)
         mat_Vfrac[AMORPH_ID] = amorph_Vfrac
 
-    mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID]
-
+    # Add dopant:
+    mat_Vfrac = add_dopant(mat_Vfrac)
     # Matrices have indeces of (mat#-1, z, y, x)
     return mat_Vfrac, mat_S, mat_theta, mat_psi
 
@@ -98,3 +105,34 @@ def add_surface_roughness(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta, ma
     mat_Vfrac[AMORPH_ID] = np.clip(mat_Vfrac[AMORPH_ID], 0, 1)
 
     return mat_Vfrac, mat_S, mat_theta, mat_psi
+
+def add_dopant(mat_Vfrac,dope_method):
+    if dope_method == 0:
+        # Fill with vacuum
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID]
+    elif dope_method == 1: #random everywhere
+        amorph_dopant = mat_Vfrac[AMORPH_ID] * np.random.random_sample(mat_Vfrac[AMORPH_ID].shape)
+        crystal_dopant = mat_Vfrac[CRYSTAL_ID] * np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape)
+        # Normalize
+        norm_factor = dopant_frac / (amorph_dopant/amorph_matrix_Vfrac + crystal_dopant).mean()
+        amorph_dopant = amorph_dopant*norm_factor
+        crystal_dopant = crystal_dopant*norm_factor
+        mat_Vfrac[DOPANT_ID] = crystal_dopant+amorph_dopant
+        mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
+        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID] - amorph_dopant
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    elif dope_method == 2: # random matrix only
+        amorph_dopant = mat_Vfrac[AMORPH_ID]* np.random.random_sample(mat_Vfrac[AMORPH_ID].shape)
+        norm_factor = dopant_frac / (amorph_dopant/amorph_matrix_Vfrac).mean()
+        amorph_dopant = amorph_dopant*norm_factor
+        mat_Vfrac[DOPANT_ID] = amorph_dopant
+        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID] - amorph_dopant
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    elif dope_method == 3: # random fibrils only
+        crystal_dopant = mat_Vfrac[CRYSTAL_ID]* np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape)
+        norm_factor = dopant_frac / crystal_dopant.mean()
+        crystal_dopant = crystal_dopant*norm_factor
+        mat_Vfrac[DOPANT_ID] = crystal_dopant
+        mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    return mat_Vfrac
