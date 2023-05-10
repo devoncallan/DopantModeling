@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.ndimage import gaussian_filter
 import opensimplex as simplex
+import os
 
 from ReducedMorphology import ReducedFibril
 from ReducedMorphology import ReducedMorphology
@@ -19,7 +20,6 @@ dope_type = 0 # 0: no dopant
               # 1: uniform random replacing p3ht 
               # 2: Dopant only in amorph matrix
               # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
-              # 4: Dopant mostly in amorph, some in fibrils (75/25)
 dopant_frac = 0.0825 #approx total vfrac dopant for normalization
 
 # Core-shell parameters
@@ -136,3 +136,35 @@ def add_dopant(mat_Vfrac,dope_method):
         mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     return mat_Vfrac
+
+def save_parameters(path: string, filename: string, rm: ReducedMorphology, notes: string=None):
+    try:
+        os.mkdir(path)
+    with open(filename + ".txt", "w") as f
+        f.write(filename + "\n")
+        f.write(notes + "\n")
+        f.write("Box dimensions: \n")
+        f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")
+        f.write(f"y: {rm.y_dim_nm} nm ({rm.y_dim} voxels)\n")
+        f.write(f"z: {rm.z_dim_nm} nm ({rm.z_dim} voxels)\n")
+        f.write(f"pitch: {rm.pitch_nm} nm\n\n")
+        f.write(f"Fibril description: \n")
+        f.write(f"Average radius: {rm.radius_nm_avg} nm\n")
+        f.write(f"Radius std: {rm.radius_nm_std} nm\n")
+        f.write(f"Length range: [{rm.min_fibril_length},{rm.max_fibril_length}]\n")
+        f.write(f"Number of generated fibrils: {rm.num_fibrils}\n\n")
+        f.write("Simulation type and parameters:\n")
+        f.write(f"Amorphous matrix total volume fraction: {amorph_matrix_Vfrac}\n")
+        f.write(f"Surface roughness?: {surface_roughness}\n")
+        if surface_roughness:
+            f.write(f"    Height of features: {max_valley_nm}\n nm")
+            f.write(f"    Width of features: 1/{height_feature} of box, {rm.x_dim_nm/height_feature} nm\n")
+        f.write(f"Core/shell morphology?: {core_shell_morphology}\n")
+        if core_shell_morphology:
+            f.write(f"    Shell gaussian σ: {gaussian_std}\n")
+            f.write(f"    Shell cutoff: {fibril_shell_cutoff}\n")
+        f.write(f"Doping of the system: {bool(dope_type)}")
+        if bool(dope_type):
+            dope_message = ["","Dopant distributed throughout randomly","Dopant distributed through amorphous matrix only","Dopant distributed through fibrils only"]
+            f.write(f"    {dope_message[dope_type]}")
+            f.write(f"    Dopant total volume fraction normalized to {dopant_vfrac}")
