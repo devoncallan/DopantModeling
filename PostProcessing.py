@@ -15,8 +15,8 @@ AMORPH_ID  = 2 # Amorphous P3HT
 DOPANT_ID  = 3 # Dopant (optional)
 
 ### Post processing parameters
-num_materials = 3 
-dope_type = 0 # 0: no dopant 
+num_materials = 4
+dope_type = 3 # 0: no dopant 
               # 1: uniform random replacing p3ht 
               # 2: Dopant only in amorph matrix
               # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
@@ -67,7 +67,7 @@ def generate_material_matricies(rm: ReducedMorphology):
         mat_Vfrac[AMORPH_ID] = amorph_Vfrac
 
     # Add dopant:
-    mat_Vfrac = add_dopant(mat_Vfrac)
+    mat_Vfrac = add_dopant(mat_Vfrac, dope_type)
     # Matrices have indeces of (mat#-1, z, y, x)
     return mat_Vfrac, mat_S, mat_theta, mat_psi
 
@@ -114,7 +114,7 @@ def add_dopant(mat_Vfrac,dope_method):
         amorph_dopant = mat_Vfrac[AMORPH_ID] * np.random.random_sample(mat_Vfrac[AMORPH_ID].shape)
         crystal_dopant = mat_Vfrac[CRYSTAL_ID] * np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape)
         # Normalize
-        norm_factor = dopant_frac / (amorph_dopant/amorph_matrix_Vfrac + crystal_dopant).mean()
+        norm_factor = dopant_frac / ((amorph_dopant + crystal_dopant).mean())
         amorph_dopant = amorph_dopant*norm_factor
         crystal_dopant = crystal_dopant*norm_factor
         mat_Vfrac[DOPANT_ID] = crystal_dopant+amorph_dopant
@@ -137,10 +137,8 @@ def add_dopant(mat_Vfrac,dope_method):
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     return mat_Vfrac
 
-def save_parameters(path: string, filename: string, rm: ReducedMorphology, notes: string=None):
-    try:
-        os.mkdir(path)
-    with open(filename + ".txt", "w") as f
+def save_parameters(filename: str, rm: ReducedMorphology, notes: str=None):
+    with open("Parameters_" + filename + ".txt", "w") as f:
         f.write(filename + "\n")
         f.write(notes + "\n")
         f.write("Box dimensions: \n")
@@ -151,13 +149,13 @@ def save_parameters(path: string, filename: string, rm: ReducedMorphology, notes
         f.write(f"Fibril description: \n")
         f.write(f"Average radius: {rm.radius_nm_avg} nm\n")
         f.write(f"Radius std: {rm.radius_nm_std} nm\n")
-        f.write(f"Length range: [{rm.min_fibril_length},{rm.max_fibril_length}]\n")
+        f.write(f"Length range: [{rm.min_fibril_length_nm},{rm.max_fibril_length_nm}]\n")
         f.write(f"Number of generated fibrils: {rm.num_fibrils}\n\n")
         f.write("Simulation type and parameters:\n")
         f.write(f"Amorphous matrix total volume fraction: {amorph_matrix_Vfrac}\n")
         f.write(f"Surface roughness?: {surface_roughness}\n")
         if surface_roughness:
-            f.write(f"    Height of features: {max_valley_nm}\n nm")
+            f.write(f"    Height of features: {max_valley_nm} nm\n")
             f.write(f"    Width of features: 1/{height_feature} of box, {rm.x_dim_nm/height_feature} nm\n")
         f.write(f"Core/shell morphology?: {core_shell_morphology}\n")
         if core_shell_morphology:
@@ -167,4 +165,4 @@ def save_parameters(path: string, filename: string, rm: ReducedMorphology, notes
         if bool(dope_type):
             dope_message = ["","Dopant distributed throughout randomly","Dopant distributed through amorphous matrix only","Dopant distributed through fibrils only"]
             f.write(f"    {dope_message[dope_type]}")
-            f.write(f"    Dopant total volume fraction normalized to {dopant_vfrac}")
+            f.write(f"    Dopant total volume fraction normalized to {dopant_frac}")
