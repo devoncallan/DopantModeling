@@ -5,5 +5,10 @@ __pycache__/
 Voxelized Models/
 HDF5/
 Morphology.mp4
-Morphology.mp4
+Material1.txt
+Material2.txt
+Material3.txt
+CyRSoXS.log
+config.txt
+Fibril.hdf5
 .gitignore
