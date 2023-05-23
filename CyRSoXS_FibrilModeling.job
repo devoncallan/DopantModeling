@@ -1,7 +1,7 @@
 #!/bin/bash -l
 # Slurm script for controlled runs of python program on the Pod cluster
 
-# Set the name of the job to CyRSoXS,requesting one node on the gpu partition with 1 gpu, and a walltime of 12 hours
+# Set the name of the job to CyRSoXS,requesting one node on the gpu partition with 1 gpu, and a walltime of 48 hours
 # The job will create a new folder in the running directory. within this directory, the program will create a new folder for each trial. For each trial, it will run a python program, and execute the command CyRSoXS Fibril.hdf5 before going to the next trial.
 
 #SBATCH --job-name=CyRSoXS
@@ -9,20 +9,14 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH --time=12:00:00
+#SBATCH --time=48:00:00
 
 cd $SLURM_SUBMIT_DIR
+conda activate nrss
 export PATH=/home/maxgruschka/anaconda3/envs/nrss/bin/python:$PATH
 
-mkdir -p "${SLURM_JOB_ID}-HD_and_Plot"
+mkdir -p "${SLURM_JOB_ID}"
 cd $SLURM_JOB_ID
 
 # Run the program
-for i in {1..2}
-do
-    mkdir -p $i
-    cd $i
-    python /home/maxgruschka/DopantModeling/FibrilMasking.py 
-    CyRSoXS Fibril.hdf5
-    cd ..
-done
+python /home/maxgruschka/DopantModeling/FibrilMasking.py 
