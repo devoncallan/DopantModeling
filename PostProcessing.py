@@ -16,21 +16,21 @@ DOPANT_ID  = 3 # Dopant (optional)
 
 ### Post processing parameters
 num_materials = 4
-dope_type = 3 # 0: no dopant 
+dope_type = 1 # 0: no dopant 
               # 1: uniform random replacing p3ht 
               # 2: Dopant only in amorph matrix
               # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
 dopant_frac = 0.0825 #approx total vfrac dopant for normalization
 
 # Core-shell parameters
-core_shell_morphology = True
+core_shell_morphology = False
 gaussian_std = 3
 fibril_shell_cutoff = 0.2
 
 # Surface roughness parameters
 surface_roughness = True
 height_feature = 3
-max_valley_nm = 32
+max_valley_nm = 46
 amorph_matrix_Vfrac = 0.9
 
 def generate_material_matricies(rm: ReducedMorphology):
@@ -105,7 +105,22 @@ def add_surface_roughness(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta, ma
     mat_Vfrac[AMORPH_ID] = np.clip(mat_Vfrac[AMORPH_ID], 0, 1)
 
     return mat_Vfrac, mat_S, mat_theta, mat_psi
-
+def calc_roughness(mat_Vfrac, pitch):
+    #https://www.keyence.com/ss/products/microscope/roughness/surface/sq-root-mean-square-height.jsp
+    vac_Vfrac = mat_Vfrac[VACUUM_ID]
+    vac_Vfrac[vac_Vfrac != 1] = 0
+    rms_surface = 0
+    for x in range(vac_Vfrac.shape[2]):
+        for y in range(vac_Vfrac.shape[1]):
+            try:
+                current_height = min(np.nonzero(vac_Vfrac[:,y,x])[0])
+            except ValueError:
+                current_height = vac_Vfrac.shape[0]
+            rms_surface += pitch*pitch*((pitch*current_height)**2)
+    area = pitch*len(vac_Vfrac[2]) * pitch*len(vac_Vfrac[1])
+    rms_surface = np.sqrt(rms_surface/area)
+    return rms_surface
+    
 def add_dopant(mat_Vfrac,dope_method):
     if dope_method == 0:
         # Fill with vacuum
@@ -159,7 +174,7 @@ def save_parameters(filename: str, rm: ReducedMorphology, notes: str=None):
             f.write(f"    Width of features: 1/{height_feature} of box, {rm.x_dim_nm/height_feature} nm\n")
         f.write(f"Core/shell morphology?: {core_shell_morphology}\n")
         if core_shell_morphology:
-            f.write(f"    Shell gaussian σ: {gaussian_std}\n")
+            f.write(f"    Shell gaussian std: {gaussian_std}\n")
             f.write(f"    Shell cutoff: {fibril_shell_cutoff}\n")
         f.write(f"Doping of the system: {bool(dope_type)}")
         if bool(dope_type):
