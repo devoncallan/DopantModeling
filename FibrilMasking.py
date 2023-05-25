@@ -39,6 +39,7 @@ sys.path.append('/home/maxgruschka/NRSS/')
 #%% Create the morphology/run parameters
 # Declare model box size in nm (x,y,z)
 gen_new_morph = False
+
 morphs12nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/512x512x150nm_pitch2nm_rad8nm_std2nm_150fib_100-400nm.pickle',
                      '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_400fib_100-400nm.pickle',
                      '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_400fib_100-500nm.pickle',
@@ -54,9 +55,13 @@ morphs15nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x2
 
 runNote = 'First run of densely packed'
 
-energies = np.round(np.arange(283., 300.,0.2),1) # Energies for CyRSoXs (init,fin,step) (eV)
 morph_filename = morphs12nmKnown[3]
 # morph_filename = morphs15nmKnown[]
+energies1 = np.round(np.arange(280., 286., 0.5),1)
+energies2 = np.round(np.arange(286., 288., 0.2),1)
+energies3 = np.round(np.arange(288., 295., 0.5),1)
+energies = np.concatenate([energies1, energies2, energies3])
+
 dope_types = [0]
 dopant_frac = 0.0825
 core_shell_morphologies = [True]
