@@ -16,6 +16,8 @@ DOPANT_ID  = 3 # Dopant (optional)
 
 ### Post processing parameters
 num_materials = 4
+
+# Doping parameters
 dope_type = 1 # 0: no dopant 
               # 1: uniform random replacing p3ht 
               # 2: Dopant only in amorph matrix
@@ -33,6 +35,9 @@ surface_roughness = True
 height_feature = 3
 max_valley_nm = 46
 amorph_matrix_Vfrac = 0.9
+
+# Amorphous matrix parameter
+amorphous_orientation = True
 
 def generate_material_matricies(rm: ReducedMorphology):
     mat_Vfrac = np.zeros((num_materials, rm.z_dim, rm.y_dim, rm.x_dim))
@@ -67,8 +72,13 @@ def generate_material_matricies(rm: ReducedMorphology):
         amorph_Vfrac[amorph_mask] = np.clip(amorph_Vfrac[amorph_mask], 0, 1)
         mat_Vfrac[AMORPH_ID] = amorph_Vfrac
 
+    # Add amorphous orientation
+    if amorphous_orientation:
+        mat_Vfrac, mat_S, mat_theta, mat_psi = set_amorphous_orientation(rm, mat_Vfrac, mat_S, mat_theta, mat_psi)
+
     # Add dopant:
     mat_Vfrac = add_dopant(mat_Vfrac, dope_type)
+    
     # Matrices have indeces of (mat#-1, z, y, x)
     return mat_Vfrac, mat_S, mat_theta, mat_psi
 
@@ -127,16 +137,16 @@ def add_dopant(mat_Vfrac,dope_method, partMat=0.5, partFib=0.5):
         # Fill with vacuum
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID]
     elif dope_method == 1: #random everywhere
-        amorph_dopant = mat_Vfrac[AMORPH_ID] * np.random.random_sample(mat_Vfrac[AMORPH_ID].shape)
+        amorph_dopant  = mat_Vfrac[AMORPH_ID] * np.random.random_sample(mat_Vfrac[AMORPH_ID].shape)
         crystal_dopant = mat_Vfrac[CRYSTAL_ID] * np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape)
         # Normalize
         norm_factor = dopant_frac / ((amorph_dopant + crystal_dopant).mean())
         amorph_dopant = amorph_dopant*norm_factor
         crystal_dopant = crystal_dopant*norm_factor
-        mat_Vfrac[DOPANT_ID] = crystal_dopant+amorph_dopant
+        mat_Vfrac[DOPANT_ID]  = crystal_dopant+amorph_dopant
         mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
-        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID] - amorph_dopant
-        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+        mat_Vfrac[AMORPH_ID]  = mat_Vfrac[AMORPH_ID] - amorph_dopant
+        mat_Vfrac[VACUUM_ID]  = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     elif dope_method == 2: # random matrix only
         amorph_dopant = mat_Vfrac[AMORPH_ID]* np.random.random_sample(mat_Vfrac[AMORPH_ID].shape)
         norm_factor = dopant_frac / (amorph_dopant/amorph_matrix_Vfrac).mean()
@@ -148,7 +158,7 @@ def add_dopant(mat_Vfrac,dope_method, partMat=0.5, partFib=0.5):
         crystal_dopant = mat_Vfrac[CRYSTAL_ID]* np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape)
         norm_factor = dopant_frac / crystal_dopant.mean()
         crystal_dopant = crystal_dopant*norm_factor
-        mat_Vfrac[DOPANT_ID] = crystal_dopant
+        mat_Vfrac[DOPANT_ID]  = crystal_dopant
         mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     elif dope_method == 4: #Uniform dopant
@@ -171,6 +181,21 @@ def add_dopant(mat_Vfrac,dope_method, partMat=0.5, partFib=0.5):
         mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID] - amorph_dopant
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     return mat_Vfrac
+
+def set_amorphous_orientation(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta, mat_psi):
+    # https://mathworld.wolfram.com/SpherePointPicking.html 
+    for z in range(rm.z_dim):
+        for y in range(rm.y_dim):
+            for x in range(rm.x_dim):
+                if mat_Vfrac[AMORPH_ID,z,y,x] == amorph_matrix_Vfrac:
+                    # Generate normalized random 3D vector
+                    orientation = np.random.normal(size=3)
+                    orientation /= np.linalg.norm(orientation)
+
+                    mat_S[AMORPH_ID,z,y,x] = 1
+                    mat_theta[AMORPH_ID,z,y,x] = np.arccos(orientation[2])
+                    mat_psi[AMORPH_ID,z,y,x] = np.arctan2(orientation[1], orientation[0])
+    return mat_Vfrac, mat_S, mat_theta, mat_psi
 
 def save_parameters(filename: str, rm: ReducedMorphology, morph_filename:str, notes: str=None):
     with open("Parameters_" + filename + ".txt", "w") as f:
