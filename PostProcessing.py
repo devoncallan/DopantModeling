@@ -20,6 +20,7 @@ dope_type = 1 # 0: no dopant
               # 1: uniform random replacing p3ht 
               # 2: Dopant only in amorph matrix
               # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
+              # 4: Uniformly doped to the dopant frac, all subtracted from P3HT
 dopant_frac = 0.0825 #approx total vfrac dopant for normalization
 
 # Core-shell parameters
@@ -121,7 +122,7 @@ def calc_roughness(mat_Vfrac, pitch):
     rms_surface = np.sqrt(rms_surface/area)
     return rms_surface
     
-def add_dopant(mat_Vfrac,dope_method):
+def add_dopant(mat_Vfrac,dope_method, partMat=0.5, partFib=0.5):
     if dope_method == 0:
         # Fill with vacuum
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID]
@@ -150,11 +151,31 @@ def add_dopant(mat_Vfrac,dope_method):
         mat_Vfrac[DOPANT_ID] = crystal_dopant
         mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    elif dope_method == 4: #Uniform dopant
+        # Making dopant:
+        mat_Vfrac[DOPANT_ID] = (mat_Vfrac[CRYSTAL_ID] + mat_Vfrac[AMORPH_ID])*dopant_frac
+        # Subtracting dopant:
+        mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID]*(1-dopant_frac)
+        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID]*(1-dopant_frac)
+        # Vacuum remaining:
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    elif dope_method == 5: # preferential random doping
+        amorph_dopant = mat_Vfrac[AMORPH_ID] * (partMat*np.random.random_sample(mat_Vfrac[AMORPH_ID].shape))
+        crystal_dopant = mat_Vfrac[CRYSTAL_ID] * (partFib*np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape))
+        # Normalize
+        norm_factor = dopant_frac / ((amorph_dopant + crystal_dopant).mean())
+        amorph_dopant = amorph_dopant*norm_factor
+        crystal_dopant = crystal_dopant*norm_factor
+        mat_Vfrac[DOPANT_ID] = crystal_dopant+amorph_dopant
+        mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
+        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID] - amorph_dopant
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     return mat_Vfrac
 
-def save_parameters(filename: str, rm: ReducedMorphology, notes: str=None):
+def save_parameters(filename: str, rm: ReducedMorphology, morph_filename:str, notes: str=None):
     with open("Parameters_" + filename + ".txt", "w") as f:
         f.write(filename + "\n")
+        f.write(f'Morphology file used: {morph_filename}')
         f.write(notes + "\n")
         f.write("Box dimensions: \n")
         f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")

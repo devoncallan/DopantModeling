@@ -8,13 +8,11 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # import trimesh
-import random
 import pickle
 from NRSS.writer import write_materials, write_hdf5, write_config, write_slurm
 from NRSS.checkH5 import checkH5
 
 from Morphology import Morphology
-from Fibril import Fibril
 from ReducedMorphology import ReducedMorphology
 
 import sys
@@ -27,17 +25,12 @@ from PyHyperScattering.load import cyrsoxsLoader
 from PyHyperScattering.integrate import WPIntegrator
 
 
-import matplotlib.patches as patches
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 from matplotlib import cm
 from matplotlib.colors import LogNorm
 
-import io
-from PIL import Image
-import PIL
-import opensimplex as simplex
 import os
+import glob
 
 import PostProcessing
 #%% System Setup
@@ -46,9 +39,24 @@ sys.path.append('/home/maxgruschka/NRSS/')
 #%% Create the morphology/run parameters
 # Declare model box size in nm (x,y,z)
 gen_new_morph = False
-morph_filename = "/home/maxgruschka/gpuTest/Morphologies/512x512x150nm_pitch2nm_rad8nm_std2nm_150fib_100-400nm.pickle"
-energies = np.round(np.arange(283., 300.,0.5),1) # Energies for CyRSoXs (init,fin,step) (eV)
+morphs12nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/512x512x150nm_pitch2nm_rad8nm_std2nm_150fib_100-400nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_400fib_100-400nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_400fib_100-500nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_500fib_100-400nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x500nm_pitch2nm_rad12nm_std3nm_1000fib_100-500nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_100fib_100-400nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_300fib_100-400nm.pickle']
 
+morphs15nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_100fib_100-400nm.pickle',
+                     '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_300fib_100-400nm.pickle', 
+                     '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_400fib_100-400nm.pickle', 
+                     '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_500fib_100-400nm.pickle']
+
+runNote = 'First run of densely packed'
+
+energies = np.round(np.arange(283., 300.,0.2),1) # Energies for CyRSoXs (init,fin,step) (eV)
+morph_filename = morphs12nmKnown[3]
+# morph_filename = morphs15nmKnown[]
 dope_types = [0]
 dopant_frac = 0.0825
 core_shell_morphologies = [True]
@@ -57,7 +65,7 @@ fibril_shell_cutoff = 0.2
 # Surface roughness parameters
 surface_roughnesses = [True]
 height_features = [3]
-max_valley_nms = [32]
+max_valley_nms = [45]
 amorph_matrix_Vfrac = 0.9
 
 if gen_new_morph:
@@ -71,7 +79,7 @@ if gen_new_morph:
     r_nm_avg = 12
     r_nm_std = 3
     num_fibrils = 400
-    fib_length_nm_range = [100,500]
+    fib_length_nm_range = [100,400]
     
 
     morphology = Morphology(x_dim_nm, y_dim_nm, z_dim_nm, pitch_nm)
@@ -90,6 +98,7 @@ if gen_new_morph:
     print("reduced")
     # Generate material matricies
     rmorphology.pickle()
+    morph_filename = glob.glob('*.pickle')
 else:
     with open(morph_filename, "rb") as f:
         rmorphology = pickle.load(f)
@@ -172,7 +181,7 @@ for dope_type in dope_types:
                     fig3.savefig("Anisotropy_high-q.png")
                     print(f"Roughness = {PostProcessing.calc_roughness(mat_Vfrac,rmorphology.pitch_nm)}")
                     
-                    PostProcessing.save_parameters("Save-and-dope-trial",rmorphology, notes = "Part of my mass-set run of CyRSoXS")
+                    PostProcessing.save_parameters("Save-and-dope-trial",rmorphology, morph_filename, notes = runNote)
                     load = None
                     integ = None
                     os.chdir("..")
