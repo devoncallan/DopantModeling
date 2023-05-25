@@ -49,6 +49,12 @@ gen_new_morph = False
 morph_filename = "/home/maxgruschka/gpuTest/Morphologies/512x512x150nm_pitch2nm_rad8nm_std2nm_150fib_100-400nm.pickle"
 energies = np.round(np.arange(283., 300.,0.5),1) # Energies for CyRSoXs (init,fin,step) (eV)
 
+# energies1 = np.round(np.arange(280., 286., 0.5),1)
+# energies2 = np.round(np.arange(286., 288., 0.2),1)
+# energies3 = np.round(np.arange(288., 295., 0.5),1)
+# energies = np.concatenate([energies1, energies2, energies3])
+# print(energies)
+
 dope_types = [0]
 dopant_frac = 0.0825
 core_shell_morphologies = [True]
