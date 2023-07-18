@@ -120,7 +120,7 @@ class Morphology:
         return self.check_mesh_within_bounding_box(mesh) and not check_mesh_intersection_with_fibrils(mesh)
     
     def set_model_parameters(self, radius_nm_avg: float, radius_nm_std: float, max_num_fibrils: int, 
-                             fibril_length_range_nm: list):
+                             fibril_length_range_nm: list, rand_orientation: bool=False):
         self.radius_nm_avg = radius_nm_avg
         self.radius_nm_std = radius_nm_std
         self.radius_avg = radius_nm_avg / self.pitch_nm
@@ -130,15 +130,21 @@ class Morphology:
         self.max_fibril_length_nm = max(fibril_length_range_nm)
         self.min_fibril_length = self.min_fibril_length_nm / self.pitch_nm
         self.max_fibril_length = self.max_fibril_length_nm / self.pitch_nm
+        self.rand_orientation = rand_orientation
         
     def get_random_point(self):
         return self.dims * np.random.rand(3)
     
     def get_random_direction(self):
-        theta = (90 + np.random.normal(0, 1.0))/180 * np.pi
-        phi   = np.random.uniform(0, np.pi)
-        direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
-        # direction = np.random.rand(3)
+        if self.rand_orientation:
+            theta = np.random.normal(90,30)/180 * np.pi
+            phi = np.random.uniform(0,np.pi)
+            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+        else:
+            theta = (90 + np.random.normal(0, 1.0))/180 * np.pi
+            phi   = np.random.uniform(0, np.pi)
+            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+            # direction = np.random.rand(3)
         return direction / np.linalg.norm(direction)
     
     def new_fibril(self):
