@@ -56,9 +56,11 @@ morphs15nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x2
                      '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_500fib_100-400nm.pickle']
 
 randmorphs = ['/home/maxgruschka/gpuTest/Morphologies/1024x1024x256nm_pitch2nm_rad15nm_std3nm_1000fib_40-60nm.pickle']
-runNote = 'Using XSpectra F4TCNQ reduced optical constants for the first time'
+runNote = 'Using pea-size system to see if it helps low/high q ranges'
 
-morph_filename = morphs12nmKnown[1]
+# morph_filename = morphs12nmKnown[1]
+morph_filename = randmorphs[0]
+
 # dopantFile = '/home/maxgruschka/DopantModeling/F4TCNQ_Reor_C.txt'
 # dopantFile = '/home/maxgruschka/DopantModeling/TFSINa_C.txt'
 dopantFile = '/home/maxgruschka/DopantModeling/XSpec_RedF4TCNQ_C.txt'
