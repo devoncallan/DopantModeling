@@ -38,7 +38,7 @@ sys.path.append('/home/maxgruschka/NRSS/')
 
 #%% Create the morphology/run parameters
 # Declare model box size in nm (x,y,z)
-gen_new_morph = False
+gen_new_morph = True
 
 morphs12nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/512x512x150nm_pitch2nm_rad8nm_std2nm_150fib_100-400nm.pickle',
                      '/home/maxgruschka/gpuTest/Morphologies/12_nmFibs/1024x1024x256nm_pitch2nm_rad12nm_std3nm_400fib_100-400nm.pickle',
@@ -56,7 +56,7 @@ morphs15nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x2
                      '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_500fib_100-400nm.pickle']
 
 randmorphs = ['/home/maxgruschka/gpuTest/Morphologies/1024x1024x256nm_pitch2nm_rad15nm_std3nm_1000fib_40-60nm.pickle']
-runNote = 'Using pea-size system to see if it helps low/high q ranges'
+runNote = 'Deeper box, longer fibrils test and generation'
 
 # morph_filename = morphs12nmKnown[1]
 morph_filename = randmorphs[0]
@@ -73,7 +73,7 @@ energies2 = np.round(np.arange(286., 288., 0.2),1)
 energies3 = np.round(np.arange(288., 295., 0.5),1)
 energies = np.concatenate([energies1, energies2, energies3])
 
-dope_types = [0,1,5]
+dope_types = [1]
 dopant_frac = 0.0825
 core_shell_morphologies = [True]
 gaussian_std = 3
@@ -87,15 +87,15 @@ amorph_matrix_Vfrac = 0.9
 if gen_new_morph:
     x_dim_nm  = 1024
     y_dim_nm  = 1024
-    z_dim_nm  = 256
+    z_dim_nm  = 512
     pitch_nm = 2 # Dimension of voxel in nm
 
     # Initialize morphology
     # Chosen Parameters:
-    r_nm_avg = 12
+    r_nm_avg = 15
     r_nm_std = 3
-    num_fibrils = 400
-    fib_length_nm_range = [100,400]
+    num_fibrils = 800
+    fib_length_nm_range = [200,500]
     
 
     morphology = Morphology(x_dim_nm, y_dim_nm, z_dim_nm, pitch_nm)
