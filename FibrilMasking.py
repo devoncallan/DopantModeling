@@ -55,20 +55,23 @@ morphs15nmKnown = ['/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x2
                      '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_400fib_100-400nm.pickle', 
                      '/home/maxgruschka/gpuTest/Morphologies/15_nmFibs/1024x1024x256nm_pitch2nm_rad15nm_std3nm_500fib_100-400nm.pickle']
 
-runNote = 'Comparison of NaTFSI anisotropy to aligned/antialigned F4TCNQ'
+randmorphs = ['/home/maxgruschka/gpuTest/Morphologies/1024x1024x256nm_pitch2nm_rad15nm_std3nm_1000fib_40-60nm.pickle']
+runNote = 'Using XSpectra F4TCNQ reduced optical constants for the first time'
 
 morph_filename = morphs12nmKnown[1]
 # dopantFile = '/home/maxgruschka/DopantModeling/F4TCNQ_Reor_C.txt'
-dopantFile = '/home/maxgruschka/DopantModeling/TFSINa_C.txt'
-# dopantAlignments = [[True, False, True], [True, True, False], [True, False, False]]
-dopantAlignments = [[False,False,False]]
+# dopantFile = '/home/maxgruschka/DopantModeling/TFSINa_C.txt'
+dopantFile = '/home/maxgruschka/DopantModeling/XSpec_RedF4TCNQ_C.txt'
+
+dopantAlignments = [[True, False, True], [True, True, False], [True, False, False]]
+# dopantAlignments = [[False,False,False]]
 # morph_filename = morphs15nmKnown[]
 energies1 = np.round(np.arange(280., 286., 0.5),1)
 energies2 = np.round(np.arange(286., 288., 0.2),1)
 energies3 = np.round(np.arange(288., 295., 0.5),1)
 energies = np.concatenate([energies1, energies2, energies3])
 
-dope_types = [0]
+dope_types = [0,1,5]
 dopant_frac = 0.0825
 core_shell_morphologies = [True]
 gaussian_std = 3
@@ -121,7 +124,7 @@ for dopantAlignment in dopantAlignments:
             for surface_roughness in surface_roughnesses:
                 for height_feature in height_features:
                     for max_valley_nm in max_valley_nms:
-                        path = os.path.join(parent_dir,f"TFSI_Align{dopantAlignment[1]}_Anti{dopantAlignment[2]}")
+                        path = os.path.join(parent_dir,f"F4TCNQ_Align{dopantAlignment[1]}_Anti{dopantAlignment[2]}_DopeType{dope_type}")
                         try:
                             os.mkdir(path)
                         except:
