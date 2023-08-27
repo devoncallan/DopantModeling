@@ -22,6 +22,10 @@ dope_type = 1 # 0: no dopant
               # 1: uniform random replacing p3ht 
               # 2: Dopant only in amorph matrix
               # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
+              # 4: Uniformly doped to the dopant frac, all subtracted from P3HT
+              # 5: Dope preferentially towards fibrils or matrix
+MatFracDope = 0.45
+FibFracDope = 0.55
 dopant_frac = 0.0825 #approx total vfrac dopant for normalization
 
 # Core-shell parameters
@@ -37,6 +41,10 @@ amorph_matrix_Vfrac = 0.9
 
 # Amorphous matrix parameter
 amorphous_orientation = True
+dopant_orientation = True
+
+dopant_aligned = False
+dopant_antialigned = False # only one of these two can be true, if either
 
 def generate_material_matricies(rm: ReducedMorphology):
     mat_Vfrac = np.zeros((num_materials, rm.z_dim, rm.y_dim, rm.x_dim))
@@ -74,10 +82,11 @@ def generate_material_matricies(rm: ReducedMorphology):
     # Add amorphous orientation
     if amorphous_orientation:
         mat_Vfrac, mat_S, mat_theta, mat_psi = set_amorphous_orientation(rm, mat_Vfrac, mat_S, mat_theta, mat_psi)
-
+    
     # Add dopant:
     mat_Vfrac = add_dopant(mat_Vfrac, dope_type)
-    
+    if dopant_orientation:
+        mat_Vfrac, mat_S, mat_theta, mat_psi = set_dopant_orientation(rm, mat_Vfrac, mat_S, mat_theta, mat_psi)
     # Matrices have indeces of (mat#-1, z, y, x)
     return mat_Vfrac, mat_S, mat_theta, mat_psi
 
@@ -115,23 +124,23 @@ def add_surface_roughness(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta, ma
     mat_Vfrac[AMORPH_ID] = np.clip(mat_Vfrac[AMORPH_ID], 0, 1)
 
     return mat_Vfrac, mat_S, mat_theta, mat_psi
+
 def calc_roughness(mat_Vfrac, pitch):
     #https://www.keyence.com/ss/products/microscope/roughness/surface/sq-root-mean-square-height.jsp
     vac_Vfrac = mat_Vfrac[VACUUM_ID]
     vac_Vfrac[vac_Vfrac != 1] = 0
     rms_surface = 0
+    height_map = np.zeros_like(vac_Vfrac[0,:,:])
     for x in range(vac_Vfrac.shape[2]):
         for y in range(vac_Vfrac.shape[1]):
             try:
-                current_height = min(np.nonzero(vac_Vfrac[:,y,x])[0])
+                height_map[x,y] = min(np.nonzero(vac_Vfrac[:,y,x])[0])
             except ValueError:
-                current_height = vac_Vfrac.shape[0]
-            rms_surface += pitch*pitch*((pitch*current_height)**2)
-    area = pitch*len(vac_Vfrac[2]) * pitch*len(vac_Vfrac[1])
-    rms_surface = np.sqrt(rms_surface/area)
+                height_map[x,y] = vac_Vfrac.shape[0]
+    rms_surface = height_map.std()*pitch
     return rms_surface
     
-def add_dopant(mat_Vfrac,dope_method):
+def add_dopant(mat_Vfrac,dope_method, partMat=MatFracDope, partFib=FibFracDope):
     if dope_method == 0:
         # Fill with vacuum
         mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID]
@@ -159,7 +168,26 @@ def add_dopant(mat_Vfrac,dope_method):
         crystal_dopant = crystal_dopant*norm_factor
         mat_Vfrac[DOPANT_ID]  = crystal_dopant
         mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
-        mat_Vfrac[VACUUM_ID]  = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    elif dope_method == 4: #Uniform dopant
+        # Making dopant:
+        mat_Vfrac[DOPANT_ID] = (mat_Vfrac[CRYSTAL_ID] + mat_Vfrac[AMORPH_ID])*dopant_frac
+        # Subtracting dopant:
+        mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID]*(1-dopant_frac)
+        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID]*(1-dopant_frac)
+        # Vacuum remaining:
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
+    elif dope_method == 5: # preferential random doping
+        amorph_dopant = partMat * mat_Vfrac[AMORPH_ID] * (partMat*np.random.random_sample(mat_Vfrac[AMORPH_ID].shape))
+        crystal_dopant = partFib * mat_Vfrac[CRYSTAL_ID] * (partFib*np.random.random_sample(mat_Vfrac[CRYSTAL_ID].shape))
+        # Normalize
+        norm_factor = dopant_frac / ((amorph_dopant + crystal_dopant).mean())
+        amorph_dopant = amorph_dopant*norm_factor
+        crystal_dopant = crystal_dopant*norm_factor
+        mat_Vfrac[DOPANT_ID] = crystal_dopant+amorph_dopant
+        mat_Vfrac[CRYSTAL_ID] = mat_Vfrac[CRYSTAL_ID] - crystal_dopant
+        mat_Vfrac[AMORPH_ID] = mat_Vfrac[AMORPH_ID] - amorph_dopant
+        mat_Vfrac[VACUUM_ID] = 1 - mat_Vfrac[CRYSTAL_ID] - mat_Vfrac[AMORPH_ID] - mat_Vfrac[DOPANT_ID]
     return mat_Vfrac
 
 def set_amorphous_orientation(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta, mat_psi):
@@ -167,7 +195,7 @@ def set_amorphous_orientation(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta
     for z in range(rm.z_dim):
         for y in range(rm.y_dim):
             for x in range(rm.x_dim):
-                if mat_Vfrac[AMORPH_ID,z,y,x] == amorph_matrix_Vfrac:
+                if mat_Vfrac[AMORPH_ID,z,y,x] != 0:
                     # Generate normalized random 3D vector
                     orientation = np.random.normal(size=3)
                     orientation /= np.linalg.norm(orientation)
@@ -177,9 +205,70 @@ def set_amorphous_orientation(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta
                     mat_psi[AMORPH_ID,z,y,x] = np.arctan2(orientation[1], orientation[0])
     return mat_Vfrac, mat_S, mat_theta, mat_psi
 
-def save_parameters(filename: str, rm: ReducedMorphology, notes: str=None):
+def perpendicularVector(vector):
+    if vector[0] != 0:
+        dir = np.array([-(vector[1]+vector[2])/vector[0],1,1])
+        return dir/np.linalg.norm(dir)
+    if vector[1] != 0:
+        dir = np.array([1,-(vector[2]+vector[0])/vector[1],1])
+        return dir/np.linalg.norm(dir)
+    if vector[2] !=0:
+        dir = np.array([1,1,-(vector[1]+vector[0])/vector[2]])
+        return dir/np.linalg.norm(dir)
+
+def make_rotMatrix(axis,angle):
+    cosA = np.cos(angle)
+    sinA = np.sin(angle)
+    rotMatrix = np.array([[cosA + axis[0]*axis[0]*(1-cosA), axis[0]*axis[1]*(1-cosA)-axis[2]*sinA, axis[0]*axis[2]*(1-cosA)+axis[1]*sinA],
+                          [axis[0]*axis[1]*(1-cosA)+axis[2]*sinA, cosA + axis[1]*axis[1]*(1-cosA), axis[1]*axis[2]*(1-cosA)-axis[0]*sinA],
+                          [axis[0]*axis[2]*(1-cosA)-axis[1]*sinA, axis[1]*axis[2]*(1-cosA)+axis[0]*sinA, cosA + axis[2]*axis[2]*(1-cosA)]])
+    return rotMatrix
+
+def set_dopant_orientation(rm: ReducedMorphology, mat_Vfrac, mat_S, mat_theta, mat_psi):
+    for z in range(rm.z_dim):
+        for y in range(rm.y_dim):
+            for x in range(rm.x_dim):
+                # dopant exists
+                if mat_Vfrac[DOPANT_ID,z,y,x] != 0:
+                        
+                    orientation = np.random.normal(size=3)
+                    orientation /= np.linalg.norm(orientation)
+                    mat_S[DOPANT_ID,z,y,x] = 1
+                    mat_theta[DOPANT_ID,z,y,x] = np.arccos(orientation[2])
+                    mat_psi[DOPANT_ID,z,y,x] = np.arctan2(orientation[1], orientation[0])
+                    #change orientation if needed to fit with fibrils
+                    if mat_Vfrac[CRYSTAL_ID,z,y,x] != 0:
+                        if dopant_aligned:
+                            mat_theta[DOPANT_ID,z,y,x] = mat_theta[CRYSTAL_ID,z,y,x]
+                            mat_psi[DOPANT_ID,z,y,x] = mat_psi[CRYSTAL_ID,z,y,x]
+                        elif dopant_antialigned:
+                            fib_orientation = np.array([np.cos(mat_theta[CRYSTAL_ID,z,y,x]),np.sin(mat_theta[CRYSTAL_ID,z,y,x])*np.sin(mat_psi[CRYSTAL_ID,z,y,x]),np.sin(mat_theta[CRYSTAL_ID,z,y,x])*np.cos(mat_psi[CRYSTAL_ID,z,y,x])]) #Fib orientation in z,y,x
+                            fib_orientation = np.flip(fib_orientation) # now it's x,y,z for convenience
+                            orientation = perpendicularVector(fib_orientation)
+                            rand_Angle = 2*np.pi*np.random.random_sample()
+                            rotMatrix = make_rotMatrix(fib_orientation,rand_Angle)
+                            orientation = rotMatrix @ orientation
+                            mat_theta[DOPANT_ID,z,y,x] = np.arccos(orientation[2])
+                            mat_psi[DOPANT_ID,z,y,x] = np.arctan2(orientation[1], orientation[0])
+    return mat_Vfrac, mat_S, mat_theta, mat_psi
+
+def calc_volFracs(mat_Vfrac):
+    '''
+    Returns vol fracs of each component in mat_Vfrac (excpet vacuum)
+    '''
+    occVol = np.count_nonzero(mat_Vfrac[CRYSTAL_ID] + mat_Vfrac[AMORPH_ID] + mat_Vfrac[DOPANT_ID])
+    crysVol = np.sum(mat_Vfrac[CRYSTAL_ID])
+    amorphVol = np.sum(mat_Vfrac[AMORPH_ID])
+    dopeVol = np.sum(mat_Vfrac[DOPANT_ID])
+    vFracCrys = crysVol/occVol
+    vFracAmorph = amorphVol/occVol
+    vFracDope = dopeVol/occVol
+    return vFracCrys, vFracAmorph,  vFracDope
+
+def save_parameters(filename: str, rm: ReducedMorphology, morph_filename:str, notes: str=None):
     with open("Parameters_" + filename + ".txt", "w") as f:
         f.write(filename + "\n")
+        f.write(f'Morphology file used: {morph_filename}\n')
         f.write(notes + "\n")
         f.write("Box dimensions: \n")
         f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")
@@ -203,6 +292,8 @@ def save_parameters(filename: str, rm: ReducedMorphology, notes: str=None):
             f.write(f"    Shell cutoff: {fibril_shell_cutoff}\n")
         f.write(f"Doping of the system: {bool(dope_type)}")
         if bool(dope_type):
-            dope_message = ["","Dopant distributed throughout randomly","Dopant distributed through amorphous matrix only","Dopant distributed through fibrils only"]
-            f.write(f"    {dope_message[dope_type]}")
-            f.write(f"    Dopant total volume fraction normalized to {dopant_frac}")
+            dope_message = ["","Dopant distributed throughout randomly","Dopant distributed through amorphous matrix only","Dopant distributed through fibrils only","Uniformly doped throughout", "Preferentially doped towards either fibrils or matrix"]
+            f.write(f"    {dope_message[dope_type]}\n")
+            f.write(f"    Dopant total volume fraction normalized to {dopant_frac}\n")
+            if dope_type == 5:
+                f.write(f"{FibFracDope*100}% of the dopant in fibrils, {MatFracDope*100}% in amorphous matrix")
