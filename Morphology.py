@@ -4,6 +4,8 @@ import matplotlib.animation as animation
 import trimesh
 from Fibril import Fibril
 import copy
+from FyeldGenerator import generate_field
+import scipy
 
 class Morphology:
 
@@ -120,7 +122,7 @@ class Morphology:
         return self.check_mesh_within_bounding_box(mesh) and not check_mesh_intersection_with_fibrils(mesh)
     
     def set_model_parameters(self, radius_nm_avg: float, radius_nm_std: float, max_num_fibrils: int, 
-                             fibril_length_range_nm: list, rand_orientation: bool=False):
+                             fibril_length_range_nm: list, rand_orientation: int=0):
         self.radius_nm_avg = radius_nm_avg
         self.radius_nm_std = radius_nm_std
         self.radius_avg = radius_nm_avg / self.pitch_nm
@@ -135,16 +137,22 @@ class Morphology:
     def get_random_point(self):
         return self.dims * np.random.rand(3)
     
-    def get_random_direction(self):
-        if self.rand_orientation:
+    def get_random_direction(self, point):
+        if self.rand_orientation==0:
             theta = np.random.normal(90,30)/180 * np.pi
             phi = np.random.uniform(0,np.pi)
             direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
-        else:
+        elif self.rand_orientation==1:
             theta = (90 + np.random.normal(0, 1.0))/180 * np.pi
             phi   = np.random.uniform(0, np.pi)
             direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
             # direction = np.random.rand(3)
+        elif self.rand_orientation==2:
+            # use random theta close to/in plane of film
+            theta = np.random.normal(90,30)/180 * np.pi
+            # use arrays to 'lookup' the pregenerated angles at the point
+            phi = self.phi_ref[point.astype(int)]
+            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
         return direction / np.linalg.norm(direction)
     
     def new_fibril(self):
@@ -158,7 +166,7 @@ class Morphology:
         center = self.get_random_point()
 
         # Set long axis fibril direction
-        direction = self.get_random_direction()
+        direction = self.get_random_direction(center)
 
         # Set radius from specified distribution
         radius = np.random.normal(self.radius_avg, self.radius_std)
@@ -205,7 +213,23 @@ class Morphology:
     def fill_model(self):
         """ Fill morphology with fibrils
         """
-
+        if self.rand_orientation == 2:
+            # create PSD function for fyeldgenerator
+            def PSD_gauss(avg,std):
+                def Pk(k):
+                    return (1/(std*np.sqrt(2*np.pi)))*np.exp(-0.5*((k-avg)/std)**2)
+                return Pk
+            
+            # create Gauss. distribution fxn for stats
+            def distrib(shape):
+                a = np.random.normal(loc=0, scale=90, size=shape)
+                return a
+            # create array of angles at all points
+            phi_shape = tuple(self.dims)
+            phi_kav = 1/300.
+            phi_kstd = 1/500.
+            self.phi_ref = generate_field(distrib,PSD_gauss(phi_kav,phi_kstd),phi_shape)
+            self.phi_ref = 2*np.pi*scipy.stats.norm.cdf(self.phi_ref,scale=self.phi_ref.std())
         for i in range(self.max_num_fibrils):
             # Initialize a new fibril 
             fibril = self.new_fibril()
