@@ -82,7 +82,7 @@ class Fibril:
     
     def make_intersection_mesh(self):
         # Make a cylinder mesh for intersection calculations with specified radius, length, and direction 
-        mesh = trimesh.primitives.Cylinder(radius=self.radius, height=self.length, use_embree=True)
+        mesh = trimesh.primitives.Cylinder(radius=self.radius, height=self.length, mutable=True)
         mesh = self.transform_mesh(mesh, mesh.direction)
         self.intersection_mesh = mesh
         return mesh
