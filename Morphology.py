@@ -2,8 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import trimesh
-from Fibril import Fibril
 import copy
+import threading
+from Fibril import Fibril
+from tqdm import tqdm
 
 class Morphology:
 
@@ -202,22 +204,36 @@ class Morphology:
 
         return fibril
     
-    def fill_model(self):
+    def fill_model(self, timeout=10):
         """ Fill morphology with fibrils
         """
 
-        for i in range(self.max_num_fibrils):
+        def create_fibril():
             # Initialize a new fibril 
             fibril = self.new_fibril()
-        
+
             # Check if fibril is valid. If not, keep generating new fibril until it is valid.
             # Fibril is invalid if it intersects with the bounding box or any existing fibrils
             while not self.is_initial_mesh_valid(fibril.intersection_mesh):
                 fibril = self.new_fibril()
-            
+
+            return fibril
+
+        # Wrap the range object with tqdm for a loading bar
+        for i in tqdm(range(self.max_num_fibrils), desc='Filling model'):
+            fibril_creation_thread = threading.Thread(target=create_fibril)
+            fibril_creation_thread.start()
+            fibril_creation_thread.join(timeout)
+
+            if fibril_creation_thread.is_alive():
+                fibril_creation_thread.join() # Ensure the thread finishes
+                print(f"Timed out while creating fibril {i}. Ending process.")
+                break
+
+            fibril = create_fibril()
             # Save a copy of the fibril in its initial state
             init_fibril = copy.deepcopy(fibril)
-        
+
             # Grow fibrils in each direction until the fibril intersects with any other fibrils or
             # the bounding box or until the fibril reaches its maximum length
             fibril = self.grow_fibril(fibril, +1) # Grow fibril to the left
@@ -225,10 +241,7 @@ class Morphology:
 
             fibril.make_fibril_mesh()
 
-            print(f'-- Fibril {i} --')
-            # print(f'Mesh  volume: {fibril.volume}')
-            # print(f'Voxel volume: {fibril.voxel_volume}')
-            # print(f'Difference (%): {np.abs(fibril.voxel_volume - fibril.volume)/fibril.volume*100}')
+            #print(f'-- Fibril {i} --')
 
             self.fibrils.append(fibril)
 
@@ -279,3 +292,42 @@ class Morphology:
     # def analyze_crystallinity(self):
     #     return None
 
+    def plot_fibril_histogram(self):
+        # Extracting lengths, radii, orientations theta, and orientations psi from fibrils
+        lengths = [fibril.length for fibril in self.fibrils]
+        radii = [fibril.radius for fibril in self.fibrils]
+        orientation_thetas = [fibril.orientation_theta for fibril in self.fibrils]
+        orientation_psis = [fibril.orientation_psi for fibril in self.fibrils]
+
+        # Creating a histogram for lengths
+        plt.figure(figsize=(18, 10))
+
+        plt.subplot(2, 2, 1)
+        plt.hist(lengths, bins=20, edgecolor='black')
+        plt.title('Histogram of Fibril Lengths')
+        plt.xlabel('Length')
+        plt.ylabel('Frequency')
+
+        # Creating a histogram for radii
+        plt.subplot(2, 2, 2)
+        plt.hist(radii, bins=20, edgecolor='black')
+        plt.title('Histogram of Fibril Radii')
+        plt.xlabel('Radius')
+        plt.ylabel('Frequency')
+
+        # Creating a plot for orientation theta
+        plt.subplot(2, 2, 3)
+        plt.hist(orientation_thetas, bins=20, edgecolor='black')
+        plt.title('Histogram of Orientation Theta')
+        plt.xlabel('Theta')
+        plt.ylabel('Frequency')
+
+        # Creating a plot for orientation psi
+        plt.subplot(2, 2, 4)
+        plt.hist(orientation_psis, bins=20, edgecolor='black')
+        plt.title('Histogram of Orientation Psi')
+        plt.xlabel('Psi')
+        plt.ylabel('Frequency')
+
+        plt.tight_layout()
+        plt.show()
