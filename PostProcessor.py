@@ -112,7 +112,7 @@ class PostProcessor:
                 mat_Vfrac = self.add_uniform_dopant(mat_Vfrac)
             elif self.dopant_method == 'preferential':
                 print("Adding preferential dopant...")
-                mat_Vfrac = self.add_preferential_dopant(mat_Vfrac)
+                mat_Vfrac = self.add_preferential_dopant(rm, mat_Vfrac)
             else:
                 raise ValueError(f"Invalid dopant method: {self.dopant_method}")
                 
@@ -269,7 +269,7 @@ class PostProcessor:
 
         return mat_Vfrac
     
-    def add_preferential_dopant(self, mat_Vfrac):
+    def add_preferential_dopant(self, rm, mat_Vfrac):
         """
         Adds dopants to the semicrystalline system based on specified volume fractions and updates mat_Vfrac.
         
@@ -300,22 +300,54 @@ class PostProcessor:
            
         4. Volume fractions in the crystalline and amorphous regions are then updated based on this value of f.
         """
-        v_c0, v_a0, _ = self.analyze_vol_fractions(mat_Vfrac)
-        x_a = 1 - self.crystal_dope_frac
+        v_c0_total, v_a0_total, _ = self.analyze_vol_fractions(mat_Vfrac)
+        x_a_total = 1 - self.crystal_dope_frac
+        f_global = (self.dopant_vol_frac * (v_a0_total + v_c0_total)) / (v_a0_total * x_a_total + v_c0_total * self.crystal_dope_frac)
         
-        # Calculate f based on the given self.dopant_vol_frac and self.crystal_dope_frac
-        f = (self.dopant_vol_frac * (v_a0 + v_c0)) / (v_a0 * x_a + v_c0 * self.crystal_dope_frac)
+        error_flag = False
         
-        # Calculate the amount to add or remove from each region
-        add_dopant = f * (self.crystal_dope_frac * v_c0 + x_a * v_a0)
-        remove_crys = f * self.crystal_dope_frac * v_c0
-        remove_amorph = f * x_a * v_a0
+        for z in tqdm(range(rm.z_dim), desc="Progress", total=rm.z_dim):
+            for y in range(rm.y_dim):
+                for x in range(rm.x_dim):
+                    v_c0 = mat_Vfrac[self.CRYSTAL_ID, z, y, x]
+                    v_a0 = mat_Vfrac[self.AMORPH_ID, z, y, x]
+                    x_a = 1 - self.crystal_dope_frac
+        
+                    if self.crystal_dope_frac * v_c0 + x_a * v_a0 == 0:
+                        continue
+        
+                    f = f_global * ((v_a0 + v_c0) / (v_a0_total + v_c0_total))
+        
+                    add_dopant = f * (self.crystal_dope_frac * v_c0 + x_a * v_a0)
+                    remove_crys = f * self.crystal_dope_frac * v_c0
+                    remove_amorph = f * x_a * v_a0
+        
+                    max_volume = 0.99 * (v_c0 + v_a0)
     
-        # Update the volume fractions
-        mat_Vfrac[self.DOPANT_ID] += add_dopant
-        mat_Vfrac[self.CRYSTAL_ID] -= remove_crys
-        mat_Vfrac[self.AMORPH_ID] -= remove_amorph
-        mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
+                    if add_dopant > max_volume:
+                        add_dopant = max_volume
+                        error_flag = True
+    
+                    max_crys_volume = 0.99 * v_c0
+                    if remove_crys > max_crys_volume:
+                        remove_crys = max_crys_volume
+                        error_flag = True
+    
+                    max_amorph_volume = 0.99 * v_a0
+                    if remove_amorph > max_amorph_volume:
+                        remove_amorph = max_amorph_volume
+                        error_flag = True
+                        
+                    # Update the volume fractions
+                    mat_Vfrac[self.DOPANT_ID, z, y, x] += add_dopant
+                    mat_Vfrac[self.CRYSTAL_ID, z, y, x] -= remove_crys
+                    mat_Vfrac[self.AMORPH_ID, z, y, x] -= remove_amorph
+                    mat_Vfrac[self.VACUUM_ID, z, y, x] = 1 - (mat_Vfrac[self.CRYSTAL_ID, z, y, x] +
+                                                              mat_Vfrac[self.AMORPH_ID, z, y, x] +
+                                                              mat_Vfrac[self.DOPANT_ID, z, y, x])
+        
+        if error_flag:
+            print("Warning: There was not enough of the corresponding material to achieve the desired dopant volume fraction at some voxels.")
         
         return mat_Vfrac
     
