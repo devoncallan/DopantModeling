@@ -1,6 +1,6 @@
 import numpy as np
 import pickle
-
+import matplotlib.pyplot as plt
 from Fibril import Fibril
 from Morphology import Morphology
 
@@ -10,6 +10,8 @@ class ReducedFibril:
         
         self.fibril_indices = np.array(f.voxel_mesh.vertices, dtype=int)
         self.direction = f.direction
+        self.length = f.length
+        self.radius = f.radius
 
         self.orientation_theta = 0
         self.orientation_psi   = 0
@@ -42,6 +44,7 @@ class ReducedMorphology:
         self.y_dim = int(round(self.y_dim_nm / self.pitch_nm))
         self.z_dim = int(round(self.z_dim_nm / self.pitch_nm))
         self.dims  = np.array([self.x_dim, self.y_dim, self.z_dim])
+
         # Morphology parameters
         self.radius_nm_avg = m.radius_nm_avg
         self.radius_nm_std = m.radius_nm_std
@@ -67,3 +70,36 @@ class ReducedMorphology:
 
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
+
+    def plot_fibril_histogram(self):
+        orientation_thetas = [fibril.orientation_theta for fibril in self.fibrils]
+        orientation_psis = [fibril.orientation_psi for fibril in self.fibrils]
+        lengths = [fibril.length for fibril in self.fibrils]
+        radii = [fibril.radius for fibril in self.fibrils]
+    
+        fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+    
+        axs[0, 0].hist(orientation_thetas, bins=20, edgecolor='black')
+        axs[0, 0].set_title('Histogram of Orientation Theta')
+        axs[0, 0].set_xlabel('Theta (rad)')
+        axs[0, 0].set_ylabel('Frequency')
+    
+        axs[0, 1].hist(orientation_psis, bins=20, edgecolor='black')
+        axs[0, 1].set_title('Histogram of Orientation Psi')
+        axs[0, 1].set_xlabel('Psi (rad)')
+        axs[0, 1].set_ylabel('Frequency')
+    
+        axs[1, 0].hist(lengths, bins=20, edgecolor='black')
+        axs[1, 0].set_title('Histogram of Fibril Lengths')
+        axs[1, 0].set_xlabel('Length')
+        axs[1, 0].set_ylabel('Frequency')
+    
+        axs[1, 1].hist(radii, bins=20, edgecolor='black')
+        axs[1, 1].set_title('Histogram of Fibril Radii')
+        axs[1, 1].set_xlabel('Radius')
+        axs[1, 1].set_ylabel('Frequency')
+    
+        plt.tight_layout()
+        plt.show()
+    
+        return fig, axs
