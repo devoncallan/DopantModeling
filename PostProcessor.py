@@ -15,6 +15,24 @@ from tqdm import tqdm
 from ReducedMorphology import ReducedFibril
 from ReducedMorphology import ReducedMorphology
 
+# dopant_method:
+    # all dopant methods:
+        # 0: no dopant 
+    # random dopant:
+        # 1: uniform random replacing p3ht 
+        # 2: Dopant only in amorph matrix
+        # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
+        # 4: Uniformly doped to the dopant frac, all subtracted from P3HT
+        # 5: Dope preferentially towards fibrils or matrix
+            # crystal_dope_frac: fraction of total dopant in crystals
+    # uniform dopant
+        # 1: uniform random replacing p3ht 
+        # 2: Dopant only in amorph matrix
+        # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
+    # preferential_dopant
+        # != 0: add dopant
+            # crystal_dope_frac: fraction of total dopant in crystals
+        
 class PostProcessor:
     VACUUM_ID = 0
     CRYSTAL_ID = 1
@@ -86,12 +104,14 @@ class PostProcessor:
     
         # Add dopant based on selected method
         if self.dope_case != 0:
-            print("Adding dopant...")
             if self.dopant_method == 'random':
+                print("Adding random dopant...")
                 mat_Vfrac = self.add_dopant(mat_Vfrac)
             elif self.dopant_method == 'uniform':
+                print("Adding uniform dopant...")
                 mat_Vfrac = self.add_uniform_dopant(mat_Vfrac)
             elif self.dopant_method == 'preferential':
+                print("Adding preferential dopant...")
                 mat_Vfrac = self.add_preferential_dopant(mat_Vfrac)
             else:
                 raise ValueError(f"Invalid dopant method: {self.dopant_method}")
@@ -362,11 +382,11 @@ class PostProcessor:
         crystalline_volume = np.sum(mat_Vfrac[self.CRYSTAL_ID])
         amorphous_volume = np.sum(mat_Vfrac[self.AMORPH_ID])
         dopant_volume = np.sum(mat_Vfrac[self.DOPANT_ID]) if self.DOPANT_ID < len(mat_Vfrac) else 0
-        dopant_moles = (dopant_volume * self.density[self.DOPANT_ID]) / self.mol_weight[self.DOPANT_ID] if dopant_volume > 0 else 0
 
         # Calculate mole fractions
         crystalline_moles = (crystalline_volume * self.density[self.CRYSTAL_ID]) / self.mol_weight[self.CRYSTAL_ID]
         amorphous_moles = (amorphous_volume * self.density[self.AMORPH_ID]) / self.mol_weight[self.AMORPH_ID]
+        dopant_moles = (dopant_volume * self.density[self.DOPANT_ID]) / self.mol_weight[self.DOPANT_ID] if dopant_volume > 0 else 0
         
         total_moles = crystalline_moles + amorphous_moles + dopant_moles
 

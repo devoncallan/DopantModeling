@@ -163,7 +163,6 @@ class Morphology:
         
         # Sample a single data point from the distribution
         sample = np.random.choice(chi_values, 1, p=normalized_weights)
-        print(f"θ sample from distribution: {sample[0]}°")
         return sample[0]
     
     def get_random_direction(self):
@@ -241,7 +240,7 @@ class Morphology:
 
         return fibril
     
-    def fill_model(self, timeout=10):
+    def fill_model(self, timeout=10, plot_histogram=False):
         """ Fill morphology with fibrils
         """
 
@@ -283,7 +282,9 @@ class Morphology:
             self.fibrils.append(fibril)
             
             clear_output(wait=True)
-            self.plot_fibril_histogram()
+            
+            if plot_histogram:
+                self.plot_fibril_histogram()
 
     def voxelize_model(self):
         for fibril in tqdm(self.fibrils, desc="Voxelizing Fibrils"):
