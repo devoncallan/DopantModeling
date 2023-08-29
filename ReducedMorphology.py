@@ -74,8 +74,8 @@ class ReducedMorphology:
     def plot_fibril_histogram(self):
         orientation_thetas = [fibril.orientation_theta for fibril in self.fibrils]
         orientation_psis = [fibril.orientation_psi for fibril in self.fibrils]
-        lengths = [fibril.length for fibril in self.fibrils]
-        radii = [fibril.radius for fibril in self.fibrils]
+        lengths = [fibril.length * self.pitch_nm for fibril in self.fibrils]
+        radii = [fibril.radius * self.pitch_nm for fibril in self.fibrils]
     
         fig, axs = plt.subplots(2, 2, figsize=(12, 12))
     

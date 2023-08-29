@@ -7,6 +7,7 @@ import threading
 import pandas as pd
 from Fibril import Fibril
 from tqdm import tqdm
+from IPython.display import display, clear_output
 
 class Morphology:
 
@@ -162,6 +163,7 @@ class Morphology:
         
         # Sample a single data point from the distribution
         sample = np.random.choice(chi_values, 1, p=normalized_weights)
+        print(f"θ sample from distribution: {sample[0]}°")
         return sample[0]
     
     def get_random_direction(self):
@@ -175,6 +177,7 @@ class Morphology:
                 
                 # Sample theta from the distribution
                 theta = self.sample_from_distribution()
+                theta = theta / 180 * np.pi
             else:
                 theta = (90 + np.random.normal(0, 1.0)) / 180 * np.pi
             
@@ -278,6 +281,9 @@ class Morphology:
             #print(f'-- Fibril {i} --')
 
             self.fibrils.append(fibril)
+            
+            clear_output(wait=True)
+            self.plot_fibril_histogram()
 
     def voxelize_model(self):
         for fibril in tqdm(self.fibrils, desc="Voxelizing Fibrils"):
@@ -328,8 +334,8 @@ class Morphology:
 
     def plot_fibril_histogram(self):
         # Extracting lengths, radii, orientations theta, and orientations psi from fibrils
-        lengths = [fibril.length for fibril in self.fibrils]
-        radii = [fibril.radius for fibril in self.fibrils]
+        lengths = [fibril.length * self.pitch_nm for fibril in self.fibrils]
+        radii = [fibril.radius * self.pitch_nm for fibril in self.fibrils]
         orientation_thetas = [fibril.orientation_theta for fibril in self.fibrils]
         orientation_psis = [fibril.orientation_psi for fibril in self.fibrils]
     
