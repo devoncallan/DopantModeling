@@ -4,6 +4,7 @@ import matplotlib.animation as animation
 import trimesh
 import copy
 import threading
+import pandas as pd
 from Fibril import Fibril
 from tqdm import tqdm
 
@@ -47,7 +48,9 @@ class Morphology:
         
         self.initialize_box()
         
-        self.fibrils = []        # # Material 1 - P3HT
+        self.fibrils = []        
+                
+        # # Material 1 - P3HT
         # self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         # self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         # self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
@@ -61,7 +64,6 @@ class Morphology:
         # self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         # self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
         # self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        
 
     def initialize_box(self):
         """Initialize voxelized box and bounding box
@@ -121,8 +123,10 @@ class Morphology:
         
         return self.check_mesh_within_bounding_box(mesh) and not check_mesh_intersection_with_fibrils(mesh)
     
-    def set_model_parameters(self, radius_nm_avg: float, radius_nm_std: float, max_num_fibrils: int, 
-                             fibril_length_range_nm: list, rand_orientation: bool=False):
+    def set_model_parameters(self, radius_nm_avg: float, radius_nm_std: float, max_num_fibrils: int,
+                             fibril_length_range_nm: list, rand_orientation: bool = False,
+                             theta_distribution=None, theta_distribution_csv=None):
+        
         self.radius_nm_avg = radius_nm_avg
         self.radius_nm_std = radius_nm_std
         self.radius_avg = radius_nm_avg / self.pitch_nm
@@ -133,20 +137,50 @@ class Morphology:
         self.min_fibril_length = self.min_fibril_length_nm / self.pitch_nm
         self.max_fibril_length = self.max_fibril_length_nm / self.pitch_nm
         self.rand_orientation = rand_orientation
-        
+
+        if theta_distribution_csv:
+            df = pd.read_csv(theta_distribution_csv)
+            chi_values = df['theta'].values
+            percentages = df['percentage'].values
+            self.theta_distribution = (chi_values, percentages)
+        else:
+            self.theta_distribution = theta_distribution
+
     def get_random_point(self):
         return self.dims * np.random.rand(3)
     
+    def sample_from_distribution(self):
+        chi_values, weights = self.theta_distribution
+        
+        # Filter out NaN values from both chi_values and weights
+        not_nan_indices = ~np.isnan(weights)
+        chi_values = chi_values[not_nan_indices]
+        weights = weights[not_nan_indices]
+        
+        # Normalize the weights
+        normalized_weights = weights / np.sum(weights)
+        
+        # Sample a single data point from the distribution
+        sample = np.random.choice(chi_values, 1, p=normalized_weights)
+        return sample[0]
+    
     def get_random_direction(self):
         if self.rand_orientation:
-            theta = np.random.normal(90,30)/180 * np.pi
-            phi = np.random.uniform(0,np.pi)
-            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+            theta = np.random.normal(90, 30)
+            theta = theta / 180 * np.pi  # Convert to radians
         else:
-            theta = (90 + np.random.normal(0, 1.0))/180 * np.pi
-            phi   = np.random.uniform(0, np.pi)
-            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
-            # direction = np.random.rand(3)
+            if self.theta_distribution is not None:
+                # Get chi_values and weights from theta_distribution
+                chi_values, weights = self.theta_distribution
+                
+                # Sample theta from the distribution
+                theta = self.sample_from_distribution()
+            else:
+                theta = (90 + np.random.normal(0, 1.0)) / 180 * np.pi
+            
+        phi = np.random.uniform(0, np.pi)
+        direction = np.asarray([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
+
         return direction / np.linalg.norm(direction)
     
     def new_fibril(self):
@@ -246,8 +280,8 @@ class Morphology:
             self.fibrils.append(fibril)
 
     def voxelize_model(self):
-        for fibril in self.fibrils:
-            fibril.make_voxelized_fibril_mesh() 
+        for fibril in tqdm(self.fibrils, desc="Voxelizing Fibrils"):
+            fibril.make_voxelized_fibril_mesh()
 
     def set_fibril_orientations(self):
         for i in range(len(self.fibrils)):
@@ -298,36 +332,37 @@ class Morphology:
         radii = [fibril.radius for fibril in self.fibrils]
         orientation_thetas = [fibril.orientation_theta for fibril in self.fibrils]
         orientation_psis = [fibril.orientation_psi for fibril in self.fibrils]
-
+    
+        # Creating a new figure and subplots
+        fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+        
         # Creating a histogram for lengths
-        plt.figure(figsize=(18, 10))
-
-        plt.subplot(2, 2, 1)
-        plt.hist(lengths, bins=20, edgecolor='black')
-        plt.title('Histogram of Fibril Lengths')
-        plt.xlabel('Length')
-        plt.ylabel('Frequency')
-
+        axs[0, 0].hist(lengths, bins=20, edgecolor='black')
+        axs[0, 0].set_title('Histogram of Fibril Lengths')
+        axs[0, 0].set_xlabel('Length')
+        axs[0, 0].set_ylabel('Frequency')
+    
         # Creating a histogram for radii
-        plt.subplot(2, 2, 2)
-        plt.hist(radii, bins=20, edgecolor='black')
-        plt.title('Histogram of Fibril Radii')
-        plt.xlabel('Radius')
-        plt.ylabel('Frequency')
-
+        axs[0, 1].hist(radii, bins=20, edgecolor='black')
+        axs[0, 1].set_title('Histogram of Fibril Radii')
+        axs[0, 1].set_xlabel('Radius')
+        axs[0, 1].set_ylabel('Frequency')
+    
         # Creating a plot for orientation theta
-        plt.subplot(2, 2, 3)
-        plt.hist(orientation_thetas, bins=20, edgecolor='black')
-        plt.title('Histogram of Orientation Theta')
-        plt.xlabel('Theta')
-        plt.ylabel('Frequency')
-
+        axs[1, 0].hist(orientation_thetas, bins=20, edgecolor='black')
+        axs[1, 0].set_title('Histogram of Orientation Theta')
+        axs[1, 0].set_xlabel('Theta (rad)')
+        axs[1, 0].set_ylabel('Frequency')
+    
         # Creating a plot for orientation psi
-        plt.subplot(2, 2, 4)
-        plt.hist(orientation_psis, bins=20, edgecolor='black')
-        plt.title('Histogram of Orientation Psi')
-        plt.xlabel('Psi')
-        plt.ylabel('Frequency')
-
+        axs[1, 1].hist(orientation_psis, bins=20, edgecolor='black')
+        axs[1, 1].set_title('Histogram of Orientation Psi')
+        axs[1, 1].set_xlabel('Psi (rad)')
+        axs[1, 1].set_ylabel('Frequency')
+    
         plt.tight_layout()
+        
+        # Show the plot
         plt.show()
+        
+        return fig, axs
