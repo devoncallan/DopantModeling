@@ -22,17 +22,18 @@ class PostProcessor:
     DOPANT_ID = 3
 
     def __init__(self, num_materials=4, mol_weight=None, density=None,
-                 dope_case=1, dopant_method='uniform', dopant_orientation=None, dopant_frac=0.0825, 
+                 dope_case=1, dopant_method='random', dopant_orientation=None, dopant_vol_frac=0.0825, crystal_dope_frac=0.5,
                  core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
                  surface_roughness=False, height_feature=3, max_valley_nm=46, 
-                 amorph_matrix_Vfrac=1, amorphous_orientation=True):
+                 amorph_matrix_Vfrac=0.9, amorphous_orientation=True):
         self.num_materials = num_materials
         self.mol_weight = mol_weight
         self.density = density
         self.dope_case = dope_case
         self.dopant_orientation = dopant_orientation
         self.dopant_method = dopant_method
-        self.dopant_frac = dopant_frac
+        self.dopant_vol_frac = dopant_vol_frac
+        self.crystal_dope_frac = crystal_dope_frac
         self.core_shell_morphology = core_shell_morphology
         self.gaussian_std = gaussian_std
         self.fibril_shell_cutoff = fibril_shell_cutoff
@@ -90,6 +91,8 @@ class PostProcessor:
                 mat_Vfrac = self.add_dopant(mat_Vfrac)
             elif self.dopant_method == 'uniform':
                 mat_Vfrac = self.add_uniform_dopant(mat_Vfrac)
+            elif self.dopant_method == 'preferential':
+                mat_Vfrac = self.add_preferential_dopant(mat_Vfrac)
             else:
                 raise ValueError(f"Invalid dopant method: {self.dopant_method}")
                 
@@ -163,38 +166,55 @@ class PostProcessor:
         theta = np.arccos(orientation[2])
         psi = np.arctan2(orientation[1], orientation[0])
         return theta, psi
-
+    
     def add_dopant(self, mat_Vfrac):
-        if self.dope_case == 0:  # Fill with vacuum
+        if self.dope_method == 0:
+            # Fill with vacuum
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID]
-    
-        elif self.dope_case == 1:  # Random everywhere
-            amorph_dopant = mat_Vfrac[self.AMORPH_ID] * np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape)
+        elif self.dope_method == 1: #random everywhere
+            amorph_dopant  = mat_Vfrac[self.AMORPH_ID] * np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape)
             crystal_dopant = mat_Vfrac[self.CRYSTAL_ID] * np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape)
-            norm_factor = self.dopant_frac / ((amorph_dopant + crystal_dopant).mean())
-            amorph_dopant *= norm_factor
-            crystal_dopant *= norm_factor
-            mat_Vfrac[self.DOPANT_ID] = crystal_dopant + amorph_dopant
-            mat_Vfrac[self.CRYSTAL_ID] -= crystal_dopant
-            mat_Vfrac[self.AMORPH_ID] -= amorph_dopant
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-    
-        elif self.dope_case == 2:  # Random matrix only
-            amorph_dopant = mat_Vfrac[self.AMORPH_ID] * np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape)
-            norm_factor = self.dopant_frac / (amorph_dopant / self.amorph_matrix_Vfrac).mean()
-            amorph_dopant *= norm_factor
+            # Normalize
+            norm_factor = self.dopant_vol_frac / ((amorph_dopant + crystal_dopant).mean())
+            amorph_dopant = amorph_dopant*norm_factor
+            crystal_dopant = crystal_dopant*norm_factor
+            mat_Vfrac[self.DOPANT_ID]  = crystal_dopant+amorph_dopant
+            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID] - crystal_dopant
+            mat_Vfrac[self.AMORPH_ID]  = mat_Vfrac[self.AMORPH_ID] - amorph_dopant
+            mat_Vfrac[self.VACUUM_ID]  = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
+        elif self.dope_method == 2: # random matrix only
+            amorph_dopant = mat_Vfrac[self.AMORPH_ID]* np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape)
+            norm_factor = self.dopant_vol_frac / (amorph_dopant/self.amorph_matrix_Vfrac).mean()
+            amorph_dopant = amorph_dopant*norm_factor
             mat_Vfrac[self.DOPANT_ID] = amorph_dopant
-            mat_Vfrac[self.AMORPH_ID] -= amorph_dopant
+            mat_Vfrac[self.AMORPH_ID] = mat_Vfrac[self.AMORPH_ID] - amorph_dopant
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-    
-        elif self.dope_case == 3:  # Random fibrils only
-            crystal_dopant = mat_Vfrac[self.CRYSTAL_ID] * np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape)
-            norm_factor = self.dopant_frac / crystal_dopant.mean()
-            crystal_dopant *= norm_factor
-            mat_Vfrac[self.DOPANT_ID] = crystal_dopant
-            mat_Vfrac[self.CRYSTAL_ID] -= crystal_dopant
+        elif self.dope_method == 3: # random fibrils only
+            crystal_dopant = mat_Vfrac[self.CRYSTAL_ID]* np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape)
+            norm_factor = self.dopant_vol_frac / crystal_dopant.mean()
+            crystal_dopant = crystal_dopant*norm_factor
+            mat_Vfrac[self.DOPANT_ID]  = crystal_dopant
+            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID] - crystal_dopant
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-    
+        elif self.dope_method == 4: #Uniform dopant
+            # Making dopant:
+            mat_Vfrac[self.DOPANT_ID] = (mat_Vfrac[self.CRYSTAL_ID] + mat_Vfrac[self.AMORPH_ID])*self.dopant_vol_frac
+            # Subtracting dopant:
+            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID]*(1-self.dopant_vol_frac)
+            mat_Vfrac[self.AMORPH_ID] = mat_Vfrac[self.AMORPH_ID]*(1-self.dopant_vol_frac)
+            # Vacuum remaining:
+            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
+        elif self.dope_method == 5: # preferential random doping
+            amorph_dopant = self.dope_method * mat_Vfrac[self.AMORPH_ID] * (self.dope_method*np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape))
+            crystal_dopant = self.crystal_dope_frac * mat_Vfrac[self.CRYSTAL_ID] * (self.crystal_dope_frac*np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape))
+            # Normalize
+            norm_factor = self.dopant_vol_frac / ((amorph_dopant + crystal_dopant).mean())
+            amorph_dopant = amorph_dopant*norm_factor
+            crystal_dopant = crystal_dopant*norm_factor
+            mat_Vfrac[self.DOPANT_ID] = crystal_dopant+amorph_dopant
+            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID] - crystal_dopant
+            mat_Vfrac[self.AMORPH_ID] = mat_Vfrac[self.AMORPH_ID] - amorph_dopant
+            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
         return mat_Vfrac
 
     def add_uniform_dopant(self, mat_Vfrac):
@@ -202,31 +222,81 @@ class PostProcessor:
         total_mol_fraction = crystalline_mol_fraction + amorphous_mol_fraction
         x = crystalline_mol_fraction / total_mol_fraction if total_mol_fraction > 0 else 0
         
-        approx_dopant_frac = self.dopant_frac / (x * (1 - self.dopant_frac))
+        approx_dopant_vol_frac = self.dopant_vol_frac / (x * (1 - self.dopant_vol_frac))
     
         if self.dope_case == 0:  # Fill with vacuum
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID]
     
         if self.dope_case == 1:  # Uniform everywhere
             total_material = mat_Vfrac[self.CRYSTAL_ID] + mat_Vfrac[self.AMORPH_ID]
-            dopant_fraction = total_material * self.dopant_frac
-            mat_Vfrac[self.DOPANT_ID] = dopant_fraction
-            mat_Vfrac[self.CRYSTAL_ID] -= dopant_fraction * mat_Vfrac[self.CRYSTAL_ID] / total_material
-            mat_Vfrac[self.AMORPH_ID] -= dopant_fraction * mat_Vfrac[self.AMORPH_ID] / total_material
+            dopant_vol_fraction = total_material * self.dopant_vol_frac
+            mat_Vfrac[self.DOPANT_ID] = dopant_vol_fraction
+            mat_Vfrac[self.CRYSTAL_ID] -= dopant_vol_fraction * mat_Vfrac[self.CRYSTAL_ID] / total_material
+            mat_Vfrac[self.AMORPH_ID] -= dopant_vol_fraction * mat_Vfrac[self.AMORPH_ID] / total_material
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
 
         elif self.dope_case == 2:  # Uniform in matrix only
-            dopant_fraction = mat_Vfrac[self.AMORPH_ID] * approx_dopant_frac
-            mat_Vfrac[self.DOPANT_ID] = dopant_fraction
-            mat_Vfrac[self.AMORPH_ID] -= dopant_fraction
+            dopant_vol_fraction = mat_Vfrac[self.AMORPH_ID] * approx_dopant_vol_frac
+            mat_Vfrac[self.DOPANT_ID] = dopant_vol_fraction
+            mat_Vfrac[self.AMORPH_ID] -= dopant_vol_fraction
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
                 
         elif self.dope_case == 3:  # Uniform in fibrils only
-            dopant_fraction = mat_Vfrac[self.CRYSTAL_ID] * approx_dopant_frac
-            mat_Vfrac[self.DOPANT_ID] = dopant_fraction
-            mat_Vfrac[self.CRYSTAL_ID] -= dopant_fraction
+            dopant_vol_fraction = mat_Vfrac[self.CRYSTAL_ID] * approx_dopant_vol_frac
+            mat_Vfrac[self.DOPANT_ID] = dopant_vol_fraction
+            mat_Vfrac[self.CRYSTAL_ID] -= dopant_vol_fraction
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
 
+        return mat_Vfrac
+    
+    def add_preferential_dopant(self, mat_Vfrac):
+        """
+        Adds dopants to the semicrystalline system based on specified volume fractions and updates mat_Vfrac.
+        
+        Parameters:
+        -----------
+        mat_Vfrac : numpy array
+            An array containing the initial volume fractions of different components.
+            Assumed to have the following indices: CRYSTAL_ID, AMORPH_ID, DOPANT_ID, VACUUM_ID.
+            
+        self.dopant_vol_frac : float
+            The desired overall volume fraction of dopants in the system.
+            
+        self.crystal_dope_frac : float
+            The desired fraction of the total dopant volume to be located in the crystalline region.
+        
+        Returns:
+        --------
+        mat_Vfrac : numpy array
+            An updated array containing the new volume fractions of different components after doping.
+            
+        Notes:
+        ------
+        1. Initial volume fractions of crystalline (v_c0) and amorphous (v_a0) regions are calculated.
+        2. The complementary fraction of dopant in amorphous region is calculated as x_a = 1 - self.crystal_dope_frac.
+        3. The amount of dopant to be added, f, is calculated as:
+        
+           f = (self.dopant_vol_frac * (v_a0 + v_c0)) / (v_a0 * x_a + v_c0 * self.crystal_dope_frac)
+           
+        4. Volume fractions in the crystalline and amorphous regions are then updated based on this value of f.
+        """
+        v_c0, v_a0, _ = self.analyze_vol_fractions(mat_Vfrac)
+        x_a = 1 - self.crystal_dope_frac
+        
+        # Calculate f based on the given self.dopant_vol_frac and self.crystal_dope_frac
+        f = (self.dopant_vol_frac * (v_a0 + v_c0)) / (v_a0 * x_a + v_c0 * self.crystal_dope_frac)
+        
+        # Calculate the amount to add or remove from each region
+        add_dopant = f * (self.crystal_dope_frac * v_c0 + x_a * v_a0)
+        remove_crys = f * self.crystal_dope_frac * v_c0
+        remove_amorph = f * x_a * v_a0
+    
+        # Update the volume fractions
+        mat_Vfrac[self.DOPANT_ID] += add_dopant
+        mat_Vfrac[self.CRYSTAL_ID] -= remove_crys
+        mat_Vfrac[self.AMORPH_ID] -= remove_amorph
+        mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
+        
         return mat_Vfrac
     
     def set_dopant_orientation(self, rm, mat_Vfrac, mat_S, mat_theta, mat_psi):
@@ -305,59 +375,86 @@ class PostProcessor:
         dopant_mol_fraction = dopant_moles / total_moles if dopant_moles > 0 else 0
 
         return crystalline_mol_fraction, amorphous_mol_fraction, dopant_mol_fraction
+    
+    def analyze_vol_fractions(self, mat_Vfrac):
+        # Sum the volume of each component
+        crystalline_volume = np.sum(mat_Vfrac[self.CRYSTAL_ID])
+        amorphous_volume = np.sum(mat_Vfrac[self.AMORPH_ID])
+        dopant_volume = np.sum(mat_Vfrac[self.DOPANT_ID]) if self.DOPANT_ID < len(mat_Vfrac) else 0
 
-    def save_parameters(self, filename, rm, mat_Vfrac, mol_weight=None, density=None, material_dict=None, notes=None):
-        crystalline_mol_fraction, amorphous_mol_fraction, dopant_mol_fraction = self.analyze_mol_fractions(mat_Vfrac)
-        with open("Parameters_" + filename + ".txt", "w") as f:
-            f.write(filename + "\n")
-            if notes:
-                f.write(notes + "\n")
-            
-            # Materials Information
-            f.write("Materials Information:\n")
-            if material_dict:
-                f.write(f"Materials:: {material_dict}\n")
-            if mol_weight:
-                f.write(f"Molecular Weights: {mol_weight}\n")
-            if density:
-                f.write(f"Density: {density}\n\n")
-            
-            # Box dimensions
-            f.write("Box dimensions: \n")
-            f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")
-            f.write(f"y: {rm.y_dim_nm} nm ({rm.y_dim} voxels)\n")
-            f.write(f"z: {rm.z_dim_nm} nm ({rm.z_dim} voxels)\n")
-            f.write(f"pitch: {rm.pitch_nm} nm\n\n")
-            
-            # Fibril description
-            f.write(f"Fibril description: \n")
-            f.write(f"Average radius: {rm.radius_nm_avg} nm\n")
-            f.write(f"Radius std: {rm.radius_nm_std} nm\n")
-            f.write(f"Length range: [{rm.min_fibril_length_nm},{rm.max_fibril_length_nm}]\n")
-            f.write(f"Number of generated fibrils: {rm.num_fibrils}\n\n")
-            
-            # Simulation type and parameters
-            f.write("Simulation type and parameters:\n")
-            f.write(f"Amorphous matrix total volume fraction: {self.amorph_matrix_Vfrac}\n")
-            f.write(f"Surface roughness?: {self.surface_roughness}\n")
-    
-            # Mole Fractions
-            f.write("Mole Fractions:\n")
-            f.write(f"Crystalline P3HT Mole Fraction: {crystalline_mol_fraction}\n")
-            f.write(f"Amorphous P3HT Mole Fraction: {amorphous_mol_fraction}\n")
-            f.write(f"Dopant Mole Fraction: {dopant_mol_fraction if dopant_mol_fraction > 0 else 'No dopant present'}\n")
-    
-            # Other details
-            if self.surface_roughness:
-                f.write(f"    Height of features: {self.max_valley_nm} nm\n")
-                f.write(f"    Width of features: 1/{self.height_feature} of box, {rm.x_dim_nm/self.height_feature} nm\n")
-            f.write(f"Core/shell morphology?: {self.core_shell_morphology}\n")
-            if self.core_shell_morphology:
-                f.write(f"    Shell gaussian std: {self.gaussian_std}\n")
-                f.write(f"    Shell cutoff: {self.fibril_shell_cutoff}\n")
-            f.write(f"Doping of the system: {bool(self.dope_case)}")
-            if bool(self.dope_case):
-                dope_message = ["","Dopant distributed throughout randomly","Dopant distributed through amorphous matrix only","Dopant distributed through fibrils only"]
-                f.write(f"    {dope_message[self.dope_case]}")
-                f.write(f"    Dopant total volume fraction normalized to {self.dopant_frac}")
-                f.write(f"    Dopant orientation (within fibrils, relative to fibril long aixs) is {self.dopant_orientation}")
+        # Calculate the total occupied volume
+        total_volume = crystalline_volume + amorphous_volume + dopant_volume
+
+        # Calculate volume fractions
+        crystalline_vol_fraction = crystalline_volume / total_volume
+        amorphous_vol_fraction = amorphous_volume / total_volume
+        dopant_vol_fraction = dopant_volume / total_volume if dopant_volume > 0 else 0
+
+        return crystalline_vol_fraction, amorphous_vol_fraction, dopant_vol_fraction
+
+def save_parameters(self, filename, rm, mat_Vfrac, mol_weight=None, density=None, material_dict=None, notes=None):
+    crystalline_mol_fraction, amorphous_mol_fraction, dopant_mol_fraction = self.analyze_mol_fractions(mat_Vfrac)
+    with open("Parameters_" + filename + ".txt", "w") as f:
+        f.write(filename + "\n")
+        if notes:
+            f.write("Notes:\n")
+            f.write(notes + "\n\n")
+        
+        # Materials Information
+        f.write("Materials Information:\n")
+        f.write(f"Number of Materials: {self.num_materials}\n")
+        if material_dict:
+            f.write(f"Materials: {material_dict}\n")
+        if mol_weight:
+            f.write(f"Molecular Weights: {mol_weight}\n")
+        if density:
+            f.write(f"Density: {density}\n")
+        
+        # Box dimensions
+        f.write("\nBox dimensions:\n")
+        f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")
+        f.write(f"y: {rm.y_dim_nm} nm ({rm.y_dim} voxels)\n")
+        f.write(f"z: {rm.z_dim_nm} nm ({rm.z_dim} voxels)\n")
+        f.write(f"Pitch: {rm.pitch_nm} nm\n")
+        
+        # Fibril description
+        f.write("\nFibril description:\n")
+        f.write(f"Average radius: {rm.radius_nm_avg} nm\n")
+        f.write(f"Radius std deviation: {rm.radius_nm_std} nm\n")
+        f.write(f"Length range: [{rm.min_fibril_length_nm}, {rm.max_fibril_length_nm}]\n")
+        f.write(f"Number of generated fibrils: {rm.num_fibrils}\n")
+        
+        # Simulation type and parameters
+        f.write("\nSimulation type and parameters:\n")
+        f.write(f"Amorphous matrix total volume fraction: {self.amorph_matrix_Vfrac}\n")
+        f.write(f"Surface roughness: {self.surface_roughness}\n")
+        
+        # Mole Fractions
+        f.write("\nMole Fractions:\n")
+        f.write(f"Crystalline Mole Fraction: {crystalline_mol_fraction}\n")
+        f.write(f"Amorphous Mole Fraction: {amorphous_mol_fraction}\n")
+        f.write(f"Dopant Mole Fraction: {dopant_mol_fraction if dopant_mol_fraction > 0 else 'No dopant present'}\n")
+        
+        # Doping Details
+        f.write(f"\nDoping of the system: {bool(self.dope_case)}\n")
+        if bool(self.dope_case):
+            if self.dopant_method != 'preferential':
+                dope_message = ["", "Dopant distributed throughout randomly", "Dopant distributed through amorphous matrix only", "Dopant distributed through fibrils only"]
+                f.write(f"    Doping Method: {dope_message[self.dope_case]}\n")
+                f.write(f"    Dopant total volume fraction normalized to: {self.dopant_vol_frac}\n")
+                f.write(f"    Dopant orientation (within fibrils, relative to fibril long axis): {self.dopant_orientation}\n")
+            else:
+                f.write(f"    Dopant total volume fraction normalized to: {self.dopant_vol_frac}\n")
+                f.write(f"    Preferential Dopant Method Details:\n")
+                f.write(f"        Fraction of dopant in crystalline regions: {self.crystal_dope_frac}\n")
+                f.write(f"        Fraction of dopant in amorphous regions: {1 - self.crystal_dope_frac}\n")
+                
+        # Other details
+        f.write("\nAdditional Parameters:\n")
+        if self.surface_roughness:
+            f.write(f"    Height of features: {self.max_valley_nm} nm\n")
+            f.write(f"    Width of features: 1/{self.height_feature} of box, {rm.x_dim_nm/self.height_feature} nm\n")
+        f.write(f"Core/shell morphology: {self.core_shell_morphology}\n")
+        if self.core_shell_morphology:
+            f.write(f"    Shell Gaussian std: {self.gaussian_std}\n")
+            f.write(f"    Shell cutoff: {self.fibril_shell_cutoff}\n")

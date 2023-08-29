@@ -4,7 +4,6 @@ import matplotlib.animation as animation
 from scipy.ndimage import gaussian_filter
 import opensimplex as simplex
 import os
-
 from ReducedMorphology import ReducedFibril
 from ReducedMorphology import ReducedMorphology
 
