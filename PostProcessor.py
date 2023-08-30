@@ -321,8 +321,9 @@ class PostProcessor:
                     add_dopant = f * (self.crystal_dope_frac * v_c0 + x_a * v_a0)
                     remove_crys = f * self.crystal_dope_frac * v_c0
                     remove_amorph = f * x_a * v_a0
-        
-                    max_volume = 0.99 * (v_c0 + v_a0)
+                    
+                    # Ensure 1% of the original P3HT remains, so hat there are no negative volume fractions
+                    max_volume = 0.99 * (v_c0 + v_a0) 
     
                     if add_dopant > max_volume:
                         add_dopant = max_volume
