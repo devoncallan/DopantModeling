@@ -5,6 +5,10 @@ import trimesh
 import copy
 import threading
 import pandas as pd
+import scipy
+import warnings
+from scipy.optimize import curve_fit
+from FyeldGenerator import generate_field
 from Fibril import Fibril
 from tqdm import tqdm
 from IPython.display import display, clear_output
@@ -124,9 +128,13 @@ class Morphology:
         
         return self.check_mesh_within_bounding_box(mesh) and not check_mesh_intersection_with_fibrils(mesh)
     
+    # Define Gaussian function to fit to data
+    def gaussian(self, x, sigma, scale):
+        return scale * (1/(sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - np.pi/2) / sigma)**2)
+
     def set_model_parameters(self, radius_nm_avg: float, radius_nm_std: float, max_num_fibrils: int,
-                             fibril_length_range_nm: list, rand_orientation: bool = False,
-                             theta_distribution=None, theta_distribution_csv=None):
+                             fibril_length_range_nm: list, rand_orientation: int=0,
+                             theta_distribution_csv=None, k = 1, std = 1, theta_sigma = 30):
         
         self.radius_nm_avg = radius_nm_avg
         self.radius_nm_std = radius_nm_std
@@ -138,52 +146,151 @@ class Morphology:
         self.min_fibril_length = self.min_fibril_length_nm / self.pitch_nm
         self.max_fibril_length = self.max_fibril_length_nm / self.pitch_nm
         self.rand_orientation = rand_orientation
+        self.k = k
+        self.std = std
+        self.theta_sigma = theta_sigma
 
-        if theta_distribution_csv:
+        if theta_distribution_csv is not None:
+            # Load data from CSV
             df = pd.read_csv(theta_distribution_csv)
+            
+            # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
+            df = df.dropna()
+            df = df[(df['theta'] >= 60) & (df['theta'] <= 90)]
+            
+            # Get theta values and percentages
             chi_values = df['theta'].values
             percentages = df['percentage'].values
-            self.theta_distribution = (chi_values, percentages)
+            
+            # Fit the Gaussian function to the histogram data
+            params_new, _ = curve_fit(self.gaussian, chi_values / 180 * np.pi, percentages, p0=[np.pi/5, max(percentages)])
+            
+            # Extract fitted parameters
+            theta_sigma_fit, theta_scale_fit = params_new
+            
+            # Generate fitted curve
+            fit_x = np.linspace(0, np.pi, 101)
+            fit_y = self.gaussian(fit_x, theta_sigma_fit, theta_scale_fit)
+            
+             # Create figure and axis objects
+            fig, ax = plt.subplots(figsize=(10, 5))
+            
+            # Plot the original and fitted data on the axes
+            ax.plot(chi_values / 180 * np.pi, percentages, '-', color='black', linewidth=2, label='Original Data')
+            ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
+            
+            # Add labels and title
+            ax.set_xlabel('Theta (degrees)')
+            ax.set_ylabel('Frequency')
+            ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
+            
+            # Show legend
+            ax.legend()
+            
+            plt.show()
+            
+            self.theta_sigma_fit = theta_sigma_fit
+            print('Generating theta field from fit sigma...')
+            self.generate_theta_field(normalization_type='psd', new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
+            
+            # Return figure and axis
+            return fig, ax
         else:
-            self.theta_distribution = theta_distribution
-
+            print('Generating theta field...')
+            self.generate_theta_field(normalization_type='psd', new_mean=90, new_std=np.sqrt(self.theta_sigma_fit))
+            
     def get_random_point(self):
         return self.dims * np.random.rand(3)
     
-    def sample_from_distribution(self):
-        chi_values, weights = self.theta_distribution
+    def get_random_direction(self, point):
+        """
+        Generate a random direction based on specific orientation rules.
+
+        The method uses different distributions for theta and psi to generate
+        a random direction vector.
+
+        Parameters:
+        - point (array-like): A point in the field to look up for the pre-generated psi angle.
+
+        Returns:
+        - ndarray: A normalized direction vector.
+        """
+        if self.rand_orientation == 0:
+            theta = np.random.normal(90, 30) / 180 * np.pi
+            psi = np.random.uniform(0, np.pi)
+        elif self.rand_orientation == 1:
+            theta = (90 + np.random.normal(0, 1.0)) / 180 * np.pi
+            psi = np.random.uniform(0, np.pi)
+        elif self.rand_orientation == 2:
+            theta = np.random.normal(90, 30) / 180 * np.pi
+            psi = self.psi_ref[tuple(point.astype(int))]
+        elif self.rand_orientation == 3:
+            theta = self.theta_ref[tuple(point.astype(int))]
+            psi = self.psi_ref[tuple(point.astype(int))]
         
-        # Filter out NaN values from both chi_values and weights
-        not_nan_indices = ~np.isnan(weights)
-        chi_values = chi_values[not_nan_indices]
-        weights = weights[not_nan_indices]
-        
-        # Normalize the weights
-        normalized_weights = weights / np.sum(weights)
-        
-        # Sample a single data point from the distribution
-        sample = np.random.choice(chi_values, 1, p=normalized_weights)
-        return sample[0]
-    
-    def get_random_direction(self):
-        if self.rand_orientation:
-            theta = np.random.normal(90, 30)
-            theta = theta / 180 * np.pi  # Convert to radians
-        else:
-            if self.theta_distribution is not None:
-                # Get chi_values and weights from theta_distribution
-                chi_values, weights = self.theta_distribution
-                
-                # Sample theta from the distribution
-                theta = self.sample_from_distribution()
-                theta = theta / 180 * np.pi
-            else:
-                theta = (90 + np.random.normal(0, 1.0)) / 180 * np.pi
-            
-        phi = np.random.uniform(0, np.pi)
-        direction = np.asarray([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
+        direction = np.asarray([np.sin(theta) * np.cos(psi), np.sin(theta) * np.sin(psi), np.cos(theta)])
 
         return direction / np.linalg.norm(direction)
+
+    def generate_field_with_PSD(self, k, std, max_value, normalization_type='cdf', new_mean=None, new_std=None):
+        def PSD_gauss(avg, std):
+            def Pk(k):
+                return (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((k - avg) / std) ** 2)
+            return Pk
+    
+        def distrib(shape):
+            return np.random.normal(loc=0, scale=np.pi/5, size=shape)
+    
+        field_shape = tuple(self.dims)
+        generated_field = generate_field(distrib, PSD_gauss(k, std), field_shape)
+        
+        if normalization_type == 'cdf':
+            return max_value * scipy.stats.norm.cdf(generated_field, scale=generated_field.std()) - max_value/2
+        elif normalization_type == 'psd':
+            if new_mean is None or new_std is None:
+                raise ValueError("For normalization_type='psd', new_mean and new_std must be provided.")
+            
+            old_std = generated_field.std()
+            normalized_field = generated_field * (new_std / old_std) + new_mean
+            return normalized_field
+        else:
+            raise ValueError("Invalid normalization_type. Use either 'cdf' or 'psd'")
+            
+    def generate_psi_field(self, normalization_type='cdf', new_mean=None, new_std=None):
+        self.psi_ref = self.generate_field_with_PSD(self.k, self.std, 2 * np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
+        
+    def generate_theta_field(self, normalization_type='psd', new_mean=np.pi/2, new_std=np.pi/5):
+        self.theta_ref = self.generate_field_with_PSD(self.k, self.std, np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
+
+    def plot_field(self, field_type = 'psi'):
+        if field_type == 'psi':
+            field_ref = self.psi_ref
+            field_name = 'Psi'
+        elif field_type == 'theta':
+            field_ref = self.theta_ref
+            field_name = 'Theta'
+        else:
+            warnings.warn(f"Invalid field_type '{field_type}'. Use either 'theta' or 'psi'.")
+            return
+
+        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+
+        # If field_ref is 3D, take a 2D slice for plotting
+        field_data_to_plot = field_ref[:, :, 0] if len(field_ref.shape) == 3 else field_ref
+
+        # Plot the field
+        im = ax[0].imshow(field_data_to_plot, cmap='viridis', origin='lower')
+        fig.colorbar(im, ax=ax[0], label=f'{field_name} Value')
+        ax[0].set_title(f'Generated {field_name} Field')
+
+        # Plot histogram of field values
+        ax[1].hist(field_data_to_plot.flatten(), bins=50, color='blue', edgecolor='black')
+        ax[1].set_title(f'Histogram of {field_name} Values')
+        ax[1].set_xlabel(f'{field_name} Value')
+        ax[1].set_ylabel('Frequency')
+
+        plt.tight_layout()
+        return fig, ax
     
     def new_fibril(self):
         """ Initializes a new fibril object.
@@ -196,7 +303,7 @@ class Morphology:
         center = self.get_random_point()
 
         # Set long axis fibril direction
-        direction = self.get_random_direction()
+        direction = self.get_random_direction(center)
 
         # Set radius from specified distribution
         radius = np.random.normal(self.radius_avg, self.radius_std)
@@ -243,6 +350,14 @@ class Morphology:
     def fill_model(self, timeout=10, plot_histogram=False):
         """ Fill morphology with fibrils
         """
+
+        if self.rand_orientation >= 2:
+            print('Generating psi field...')
+            self.generate_psi_field()
+        
+        if self.rand_orientation >3:
+            print('Generating theta field...')
+            self.generate_theta_field()
 
         def create_fibril():
             # Initialize a new fibril 
