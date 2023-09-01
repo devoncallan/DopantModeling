@@ -59,7 +59,8 @@ randmorphs = ['/home/maxgruschka/gpuTest/Morphologies/1024x1024x256nm_pitch2nm_r
 runNote = 'Deeper box, longer fibrils test and generation'
 
 # morph_filename = morphs12nmKnown[1]
-morph_filename = randmorphs[0]
+# morph_filename = randmorphs[0]
+morph_filename = morphs12nmKnown[4]
 
 # dopantFile = '/home/maxgruschka/DopantModeling/F4TCNQ_Reor_C.txt'
 # dopantFile = '/home/maxgruschka/DopantModeling/TFSINa_C.txt'
