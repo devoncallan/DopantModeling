@@ -12,14 +12,10 @@ from FyeldGenerator import generate_field
 from Fibril import Fibril
 from tqdm import tqdm
 from IPython.display import display, clear_output
+from FieldGeneration import generate_field_with_PSD
+
 
 class Morphology:
-
-    # Type I
-
-    # Type II
-    
-    # Initialize morphology
     """
     Dimensions:
     x_dim_nm - 
@@ -27,8 +23,6 @@ class Morphology:
     z_dim_nm - z dimension of morphology box in nm
     pitch_nm - 
     """
-
-
     def __init__(self, x_dim_nm: float, y_dim_nm: float, z_dim_nm: float, pitch_nm: float):
         """Initialize morphology object
 
@@ -231,36 +225,12 @@ class Morphology:
         direction = np.asarray([np.sin(theta) * np.cos(psi), np.sin(theta) * np.sin(psi), np.cos(theta)])
 
         return direction / np.linalg.norm(direction)
-
-    def generate_field_with_PSD(self, k, std, max_value, normalization_type='cdf', new_mean=None, new_std=None):
-        def PSD_gauss(avg, std):
-            def Pk(k):
-                return (1 / (std * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((k - avg) / std) ** 2)
-            return Pk
-    
-        def distrib(shape):
-            return np.random.normal(loc=0, scale=np.pi/5, size=shape)
-    
-        field_shape = tuple(self.dims)
-        generated_field = generate_field(distrib, PSD_gauss(k, std), field_shape)
-        
-        if normalization_type == 'cdf':
-            return max_value * scipy.stats.norm.cdf(generated_field, scale=generated_field.std()) - max_value/2
-        elif normalization_type == 'psd':
-            if new_mean is None or new_std is None:
-                raise ValueError("For normalization_type='psd', new_mean and new_std must be provided.")
-            
-            old_std = generated_field.std()
-            normalized_field = generated_field * (new_std / old_std) + new_mean
-            return normalized_field
-        else:
-            raise ValueError("Invalid normalization_type. Use either 'cdf' or 'psd'")
             
     def generate_psi_field(self, normalization_type='cdf', new_mean=None, new_std=None):
-        self.psi_ref = self.generate_field_with_PSD(self.k, self.std, 2 * np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
-        
+        self.psi_ref = generate_field_with_PSD(self.k, self.std, self.dims, 2 * np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
+            
     def generate_theta_field(self, normalization_type='psd', new_mean=np.pi/2, new_std=np.pi/5):
-        self.theta_ref = self.generate_field_with_PSD(self.k, self.std, np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
+        self.theta_ref = generate_field_with_PSD(self.k, self.std, self.dims, np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
 
     def plot_field(self, field_type = 'psi'):
         if field_type == 'psi':

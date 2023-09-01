@@ -1,19 +1,13 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Aug 21 17:57:34 2023
-
-@author: Phong
-"""
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from scipy.ndimage import gaussian_filter
 import opensimplex as simplex
-import os
+from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
+from mpl_toolkits.mplot3d import Axes3D
 
-from ReducedMorphology import ReducedFibril
+
 from ReducedMorphology import ReducedMorphology
+from FieldGeneration import generate_field_with_PSD
 
 # dopant_method:
     # all dopant methods:
@@ -174,18 +168,6 @@ class PostProcessor:
         area = pitch * len(vac_Vfrac[2]) * pitch * len(vac_Vfrac[1])
         rms_surface = np.sqrt(rms_surface / area)
         return rms_surface
-
-    def euler_to_cartesian(self, theta, psi):
-        z = np.sin(theta) * np.cos(psi)
-        y = np.sin(theta) * np.sin(psi)
-        x = np.cos(theta)
-        return np.array([z, y, x])
-    
-    def cartesian_to_euler(self, orientation):
-        orientation /= np.linalg.norm(orientation)
-        theta = np.arccos(orientation[2])
-        psi = np.arctan2(orientation[1], orientation[0])
-        return theta, psi
     
     def add_dopant(self, mat_Vfrac):
         if self.dope_method == 0:
@@ -268,6 +250,18 @@ class PostProcessor:
             mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
 
         return mat_Vfrac
+    
+    def euler_to_cartesian(self, theta, psi):
+        z = np.sin(theta) * np.cos(psi)
+        y = np.sin(theta) * np.sin(psi)
+        x = np.cos(theta)
+        return np.array([z, y, x])
+    
+    def cartesian_to_euler(self, orientation):
+        orientation /= np.linalg.norm(orientation)
+        theta = np.arccos(orientation[2])
+        psi = np.arctan2(orientation[1], orientation[0])
+        return theta, psi
     
     def add_preferential_dopant(self, rm, mat_Vfrac):
         """
@@ -380,36 +374,98 @@ class PostProcessor:
                             crystal_orientation = self.euler_to_cartesian(crystal_theta, crystal_psi)
 
                         elif self.dopant_orientation == 'isotropic':
-                            random_orientation_crystal = np.random.normal(size=3)
-                            crystal_theta, crystal_psi = self.cartesian_to_euler(random_orientation_crystal / np.linalg.norm(random_orientation_crystal))
-        
-                        # Compute weighted average based on the mat_Vfrac of amorph and crystal
-                        orientation = (amorph_frac * random_orientation + crystal_frac * crystal_orientation)
-                        orientation /= np.linalg.norm(orientation)  # Normalize
-        
-                        # Convert back to Euler angles
-                        mat_theta[self.DOPANT_ID, z, y, x], mat_psi[self.DOPANT_ID, z, y, x] = self.cartesian_to_euler(orientation)
-                        mat_S[self.DOPANT_ID, z, y, x] = 1
+                            dims = (rm.z_dim, rm.y_dim, rm.x_dim)
+                            params_psi = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2 * np.pi}
+                            params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2}  # u = cos(theta), uniformly distributed in [-1, 1]
+                            
+                            random_field_psi = generate_field_with_PSD(**params_psi)
+                            random_field_u = generate_field_with_PSD(**params_u)
+                            
+                            self.plot_field(random_field_psi, "psi")
+                            self.plot_field(random_field_u, "u")
+                            
+                            # Compute z, y, x from theta and u
+                            z = random_field_u
+                            y = np.sqrt(1 - random_field_u ** 2) * np.sin(random_field_psi)
+                            x = np.sqrt(1 - random_field_u ** 2) * np.cos(random_field_psi)
+                            
+                            # Convert to Euler angles
+                            theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
+                            
+                            self.plot_on_unit_sphere(theta, psi, "Dopant Orientation")
+                            
+                            dopant_mask = np.where(mat_Vfrac[self.DOPANT_ID] > 0)
+                            mat_theta[self.DOPANT_ID][dopant_mask] = theta[dopant_mask]
+                            mat_psi[self.DOPANT_ID][dopant_mask] = psi[dopant_mask]
 
         return mat_Vfrac, mat_S, mat_theta, mat_psi
-
+    
     def set_amorphous_orientation(self, rm, mat_Vfrac, mat_S, mat_theta, mat_psi):
-        # https://mathworld.wolfram.com/SpherePointPicking.html
-        for z in tqdm(range(rm.z_dim), desc="Progress", total=rm.z_dim):
-            for y in range(rm.y_dim):
-                for x in range(rm.x_dim):
-                    if mat_Vfrac[self.AMORPH_ID, z, y, x] > 0:
-                        # Generate normalized random 3D vector
-                        orientation = np.random.normal(size=3)
-                        orientation /= np.linalg.norm(orientation)
-    
-                        # Convert the orientation to Euler angles
-                        theta, psi = self.cartesian_to_euler(orientation)
-    
-                        mat_S[self.AMORPH_ID, z, y, x] = 1
-                        mat_theta[self.AMORPH_ID, z, y, x] = theta
-                        mat_psi[self.AMORPH_ID, z, y, x] = psi
+        dims = (rm.z_dim, rm.y_dim, rm.x_dim)
+        params_psi = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2 * np.pi}
+        params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2}  # u = cos(theta), uniformly distributed in [-1, 1]
+        
+        random_field_psi = generate_field_with_PSD(**params_psi)
+        random_field_u = generate_field_with_PSD(**params_u)
+        
+        self.plot_field(random_field_psi, "psi")
+        self.plot_field(random_field_u, "u")
+        
+        # Compute z, y, x from theta and u
+        z = random_field_u
+        y = np.sqrt(1 - random_field_u ** 2) * np.sin(random_field_psi)
+        x = np.sqrt(1 - random_field_u ** 2) * np.cos(random_field_psi)
+        
+        # Convert to Euler angles
+        theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
+        
+        self.plot_on_unit_sphere(theta, psi, "Amorphous Orientation")
+        
+        amorph_mask = np.where(mat_Vfrac[self.AMORPH_ID] > 0)
+        mat_theta[self.AMORPH_ID][amorph_mask] = theta[amorph_mask]
+        mat_psi[self.AMORPH_ID][amorph_mask] = psi[amorph_mask]
+        
         return mat_Vfrac, mat_S, mat_theta, mat_psi
+    
+    def plot_field(self, field_ref, field_name):
+        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    
+        # If field_ref is 3D, take a 2D slice for plotting
+        field_data_to_plot = field_ref[0, :, :] if len(field_ref.shape) == 3 else field_ref
+    
+        # Plot the field
+        im = ax[0].imshow(field_data_to_plot, cmap='viridis', origin='lower')
+        fig.colorbar(im, ax=ax[0], label=f'{field_name} Value')
+        ax[0].set_title(f'Generated {field_name} Field')
+    
+        # Plot histogram of field values
+        ax[1].hist(field_data_to_plot.flatten(), bins=50, color='blue', edgecolor='black')
+        ax[1].set_title(f'Histogram of {field_name} Values')
+        ax[1].set_xlabel(f'{field_name} Value')
+        ax[1].set_ylabel('Frequency')
+    
+        plt.tight_layout()
+        plt.show()
+        
+    def plot_on_unit_sphere(self, theta, psi, title):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Convert spherical coordinates to Cartesian
+        x = np.sin(theta) * np.cos(psi)
+        y = np.sin(theta) * np.sin(psi)
+        z = np.cos(theta)
+        
+        ax.scatter(x, y, z, c='r', marker='o')
+        ax.set_title(title)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        
+        # Make the plot look like a sphere
+        ax.set_box_aspect([1,1,1])
+        
+        plt.show()
 
     def analyze_mol_fractions(self, mat_Vfrac):
         crystalline_volume = np.sum(mat_Vfrac[self.CRYSTAL_ID])
