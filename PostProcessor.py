@@ -392,8 +392,6 @@ class PostProcessor:
                             # Convert to Euler angles
                             theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
                             
-                            self.plot_on_unit_sphere(theta, psi, "Dopant Orientation")
-                            
                             dopant_mask = np.where(mat_Vfrac[self.DOPANT_ID] > 0)
                             mat_theta[self.DOPANT_ID][dopant_mask] = theta[dopant_mask]
                             mat_psi[self.DOPANT_ID][dopant_mask] = psi[dopant_mask]
@@ -419,8 +417,6 @@ class PostProcessor:
         # Convert to Euler angles
         theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
         
-        self.plot_on_unit_sphere(theta, psi, "Amorphous Orientation")
-        
         amorph_mask = np.where(mat_Vfrac[self.AMORPH_ID] > 0)
         mat_theta[self.AMORPH_ID][amorph_mask] = theta[amorph_mask]
         mat_psi[self.AMORPH_ID][amorph_mask] = psi[amorph_mask]
@@ -445,26 +441,6 @@ class PostProcessor:
         ax[1].set_ylabel('Frequency')
     
         plt.tight_layout()
-        plt.show()
-        
-    def plot_on_unit_sphere(self, theta, psi, title):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Convert spherical coordinates to Cartesian
-        x = np.sin(theta) * np.cos(psi)
-        y = np.sin(theta) * np.sin(psi)
-        z = np.cos(theta)
-        
-        ax.scatter(x, y, z, c='r', marker='o')
-        ax.set_title(title)
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        
-        # Make the plot look like a sphere
-        ax.set_box_aspect([1,1,1])
-        
         plt.show()
 
     def analyze_mol_fractions(self, mat_Vfrac):
