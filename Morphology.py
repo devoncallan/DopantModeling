@@ -156,7 +156,7 @@ class Morphology:
             
             # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
             df = df.dropna()
-            df = df[(df['theta'] >= 60) & (df['theta'] <= 90)]
+            df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
             
             # Get theta values and percentages
             chi_values = df['theta'].values

@@ -445,69 +445,69 @@ class PostProcessor:
 
         return crystalline_vol_fraction, amorphous_vol_fraction, dopant_vol_fraction
 
-def save_parameters(self, filename, rm, mat_Vfrac, mol_weight=None, density=None, material_dict=None, notes=None):
-    crystalline_mol_fraction, amorphous_mol_fraction, dopant_mol_fraction = self.analyze_mol_fractions(mat_Vfrac)
-    with open("Parameters_" + filename + ".txt", "w") as f:
-        f.write(filename + "\n")
-        if notes:
-            f.write("Notes:\n")
-            f.write(notes + "\n\n")
-        
-        # Materials Information
-        f.write("Materials Information:\n")
-        f.write(f"Number of Materials: {self.num_materials}\n")
-        if material_dict:
-            f.write(f"Materials: {material_dict}\n")
-        if mol_weight:
-            f.write(f"Molecular Weights: {mol_weight}\n")
-        if density:
-            f.write(f"Density: {density}\n")
-        
-        # Box dimensions
-        f.write("\nBox dimensions:\n")
-        f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")
-        f.write(f"y: {rm.y_dim_nm} nm ({rm.y_dim} voxels)\n")
-        f.write(f"z: {rm.z_dim_nm} nm ({rm.z_dim} voxels)\n")
-        f.write(f"Pitch: {rm.pitch_nm} nm\n")
-        
-        # Fibril description
-        f.write("\nFibril description:\n")
-        f.write(f"Average radius: {rm.radius_nm_avg} nm\n")
-        f.write(f"Radius std deviation: {rm.radius_nm_std} nm\n")
-        f.write(f"Length range: [{rm.min_fibril_length_nm}, {rm.max_fibril_length_nm}]\n")
-        f.write(f"Number of generated fibrils: {rm.num_fibrils}\n")
-        
-        # Simulation type and parameters
-        f.write("\nSimulation type and parameters:\n")
-        f.write(f"Amorphous matrix total volume fraction: {self.amorph_matrix_Vfrac}\n")
-        f.write(f"Surface roughness: {self.surface_roughness}\n")
-        
-        # Mole Fractions
-        f.write("\nMole Fractions:\n")
-        f.write(f"Crystalline Mole Fraction: {crystalline_mol_fraction}\n")
-        f.write(f"Amorphous Mole Fraction: {amorphous_mol_fraction}\n")
-        f.write(f"Dopant Mole Fraction: {dopant_mol_fraction if dopant_mol_fraction > 0 else 'No dopant present'}\n")
-        
-        # Doping Details
-        f.write(f"\nDoping of the system: {bool(self.dope_case)}\n")
-        if bool(self.dope_case):
-            if self.dopant_method != 'preferential':
-                dope_message = ["", "Dopant distributed throughout randomly", "Dopant distributed through amorphous matrix only", "Dopant distributed through fibrils only"]
-                f.write(f"    Doping Method: {dope_message[self.dope_case]}\n")
-                f.write(f"    Dopant total volume fraction normalized to: {self.dopant_vol_frac}\n")
-                f.write(f"    Dopant orientation (within fibrils, relative to fibril long axis): {self.dopant_orientation}\n")
-            else:
-                f.write(f"    Dopant total volume fraction normalized to: {self.dopant_vol_frac}\n")
-                f.write(f"    Preferential Dopant Method Details:\n")
-                f.write(f"        Fraction of dopant in crystalline regions: {self.crystal_dope_frac}\n")
-                f.write(f"        Fraction of dopant in amorphous regions: {1 - self.crystal_dope_frac}\n")
-                
-        # Other details
-        f.write("\nAdditional Parameters:\n")
-        if self.surface_roughness:
-            f.write(f"    Height of features: {self.max_valley_nm} nm\n")
-            f.write(f"    Width of features: 1/{self.height_feature} of box, {rm.x_dim_nm/self.height_feature} nm\n")
-        f.write(f"Core/shell morphology: {self.core_shell_morphology}\n")
-        if self.core_shell_morphology:
-            f.write(f"    Shell Gaussian std: {self.gaussian_std}\n")
-            f.write(f"    Shell cutoff: {self.fibril_shell_cutoff}\n")
+    def save_parameters(self, filename, rm, mat_Vfrac, mol_weight=None, density=None, material_dict=None, notes=None):
+        crystalline_mol_fraction, amorphous_mol_fraction, dopant_mol_fraction = self.analyze_mol_fractions(mat_Vfrac)
+        with open("Parameters_" + filename + ".txt", "w") as f:
+            f.write(filename + "\n")
+            if notes:
+                f.write("Notes:\n")
+                f.write(notes + "\n\n")
+            
+            # Materials Information
+            f.write("Materials Information:\n")
+            f.write(f"Number of Materials: {self.num_materials}\n")
+            if material_dict:
+                f.write(f"Materials: {material_dict}\n")
+            if mol_weight:
+                f.write(f"Molecular Weights: {mol_weight}\n")
+            if density:
+                f.write(f"Density: {density}\n")
+            
+            # Box dimensions
+            f.write("\nBox dimensions:\n")
+            f.write(f"x: {rm.x_dim_nm} nm ({rm.x_dim} voxels)\n")
+            f.write(f"y: {rm.y_dim_nm} nm ({rm.y_dim} voxels)\n")
+            f.write(f"z: {rm.z_dim_nm} nm ({rm.z_dim} voxels)\n")
+            f.write(f"Pitch: {rm.pitch_nm} nm\n")
+            
+            # Fibril description
+            f.write("\nFibril description:\n")
+            f.write(f"Average radius: {rm.radius_nm_avg} nm\n")
+            f.write(f"Radius std deviation: {rm.radius_nm_std} nm\n")
+            f.write(f"Length range: [{rm.min_fibril_length_nm}, {rm.max_fibril_length_nm}]\n")
+            f.write(f"Number of generated fibrils: {rm.num_fibrils}\n")
+            
+            # Simulation type and parameters
+            f.write("\nSimulation type and parameters:\n")
+            f.write(f"Amorphous matrix total volume fraction: {self.amorph_matrix_Vfrac}\n")
+            f.write(f"Surface roughness: {self.surface_roughness}\n")
+            
+            # Mole Fractions
+            f.write("\nMole Fractions:\n")
+            f.write(f"Crystalline Mole Fraction: {crystalline_mol_fraction}\n")
+            f.write(f"Amorphous Mole Fraction: {amorphous_mol_fraction}\n")
+            f.write(f"Dopant Mole Fraction: {dopant_mol_fraction if dopant_mol_fraction > 0 else 'No dopant present'}\n")
+            
+            # Doping Details
+            f.write(f"\nDoping of the system: {bool(self.dope_case)}\n")
+            if bool(self.dope_case):
+                if self.dopant_method != 'preferential':
+                    dope_message = ["", "Dopant distributed throughout randomly", "Dopant distributed through amorphous matrix only", "Dopant distributed through fibrils only"]
+                    f.write(f"    Doping Method: {dope_message[self.dope_case]}\n")
+                    f.write(f"    Dopant total volume fraction normalized to: {self.dopant_vol_frac}\n")
+                    f.write(f"    Dopant orientation (within fibrils, relative to fibril long axis): {self.dopant_orientation}\n")
+                else:
+                    f.write(f"    Dopant total volume fraction normalized to: {self.dopant_vol_frac}\n")
+                    f.write(f"    Preferential Dopant Method Details:\n")
+                    f.write(f"        Fraction of dopant in crystalline regions: {self.crystal_dope_frac}\n")
+                    f.write(f"        Fraction of dopant in amorphous regions: {1 - self.crystal_dope_frac}\n")
+                    
+            # Other details
+            f.write("\nAdditional Parameters:\n")
+            if self.surface_roughness:
+                f.write(f"    Height of features: {self.max_valley_nm} nm\n")
+                f.write(f"    Width of features: 1/{self.height_feature} of box, {rm.x_dim_nm/self.height_feature} nm\n")
+            f.write(f"Core/shell morphology: {self.core_shell_morphology}\n")
+            if self.core_shell_morphology:
+                f.write(f"    Shell Gaussian std: {self.gaussian_std}\n")
+                f.write(f"    Shell cutoff: {self.fibril_shell_cutoff}\n")
