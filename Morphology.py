@@ -14,7 +14,6 @@ from tqdm import tqdm
 from IPython.display import display, clear_output
 from FieldGeneration import generate_field_with_PSD
 
-
 class Morphology:
     """
     Dimensions:
@@ -129,7 +128,6 @@ class Morphology:
     def set_model_parameters(self, radius_nm_avg: float, radius_nm_std: float, max_num_fibrils: int,
                              fibril_length_range_nm: list, rand_orientation: int=0,
                              theta_distribution_csv=None, k = 1, std = 1, theta_sigma = 30):
-        
         self.radius_nm_avg = radius_nm_avg
         self.radius_nm_std = radius_nm_std
         self.radius_avg = radius_nm_avg / self.pitch_nm
@@ -197,33 +195,21 @@ class Morphology:
         return self.dims * np.random.rand(3)
     
     def get_random_direction(self, point):
-        """
-        Generate a random direction based on specific orientation rules.
-
-        The method uses different distributions for theta and psi to generate
-        a random direction vector.
-
-        Parameters:
-        - point (array-like): A point in the field to look up for the pre-generated psi angle.
-
-        Returns:
-        - ndarray: A normalized direction vector.
-        """
-        if self.rand_orientation == 0:
-            theta = np.random.normal(90, 30) / 180 * np.pi
-            psi = np.random.uniform(0, np.pi)
-        elif self.rand_orientation == 1:
-            theta = (90 + np.random.normal(0, 1.0)) / 180 * np.pi
-            psi = np.random.uniform(0, np.pi)
-        elif self.rand_orientation == 2:
-            theta = np.random.normal(90, 30) / 180 * np.pi
-            psi = self.psi_ref[tuple(point.astype(int))]
-        elif self.rand_orientation == 3:
-            theta = self.theta_ref[tuple(point.astype(int))]
-            psi = self.psi_ref[tuple(point.astype(int))]
-        
-        direction = np.asarray([np.sin(theta) * np.cos(psi), np.sin(theta) * np.sin(psi), np.cos(theta)])
-
+        if self.rand_orientation==0:
+            theta = np.random.normal(90,30)/180 * np.pi
+            phi = np.random.uniform(0,np.pi)
+            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+        elif self.rand_orientation==1:
+            theta = (90 + np.random.normal(0, 1.0))/180 * np.pi
+            phi   = np.random.uniform(0, np.pi)
+            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+            # direction = np.random.rand(3)
+        elif self.rand_orientation==2:
+            # use random theta close to/in plane of film
+            theta = np.random.normal(90,30)/180 * np.pi
+            # use arrays to 'lookup' the pregenerated angles at the point
+            phi = self.phi_ref[point.astype(int)]
+            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
         return direction / np.linalg.norm(direction)
             
     def generate_psi_field(self, normalization_type='cdf', new_mean=None, new_std=None):
