@@ -347,54 +347,54 @@ class PostProcessor:
         return mat_Vfrac
     
     def set_dopant_orientation(self, rm, mat_Vfrac, mat_S, mat_theta, mat_psi):
-        for z in tqdm(range(rm.z_dim), desc="Progress", total=rm.z_dim):
-            for y in range(rm.y_dim):
-                for x in range(rm.x_dim):
-                    if mat_Vfrac[self.DOPANT_ID, z, y, x] > 0:
-                        amorph_frac = mat_Vfrac[self.AMORPH_ID, z, y, x]
-                        
-                        # Generate normalized random 3D vector
-                        random_orientation = np.random.normal(size=3)
-                        random_orientation /= np.linalg.norm(random_orientation)
-                        
-                        crystal_frac = mat_Vfrac[self.CRYSTAL_ID, z, y, x]
-                        crystal_theta = mat_theta[self.CRYSTAL_ID, z, y, x]
-                        crystal_psi = mat_psi[self.CRYSTAL_ID, z, y, x]
-                        crystal_orientation = self.euler_to_cartesian(crystal_theta, crystal_psi)
-        
-                        if self.dopant_orientation == 'parallel':
-                            pass
-                        elif self.dopant_orientation == 'perpendicular':
-                            #orthogonal_vector = np.cross(crystal_orientation, [1, 0, 0])
-                            #orthogonal_vector /= np.linalg.norm(orthogonal_vector)  # Normalize
-                            #crystal_theta, crystal_psi = self.cartesian_to_euler(orthogonal_vector)
+        if self.dopant_orientation == 'isotropic':
+            dims = (rm.z_dim, rm.y_dim, rm.x_dim)
+            params_psi = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2 * np.pi}
+            params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2}  # u = cos(theta), uniformly distributed in [-1, 1]
+            
+            random_field_psi = generate_field_with_PSD(**params_psi)
+            random_field_u = generate_field_with_PSD(**params_u)
+            
+            self.plot_field(random_field_psi, "psi")
+            self.plot_field(random_field_u, "u")
+            
+            # Compute z, y, x from theta and u
+            z = random_field_u
+            y = np.sqrt(1 - random_field_u ** 2) * np.sin(random_field_psi)
+            x = np.sqrt(1 - random_field_u ** 2) * np.cos(random_field_psi)
+            
+            # Convert to Euler angles
+            theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
+            
+            dopant_mask = np.where(mat_Vfrac[self.DOPANT_ID] > 0)
+            mat_theta[self.DOPANT_ID][dopant_mask] = theta[dopant_mask]
+            mat_psi[self.DOPANT_ID][dopant_mask] = psi[dopant_mask]
+        else:
+            for z in tqdm(range(rm.z_dim), desc="Progress", total=rm.z_dim):
+                for y in range(rm.y_dim):
+                    for x in range(rm.x_dim):
+                        if mat_Vfrac[self.DOPANT_ID, z, y, x] > 0:
+                            amorph_frac = mat_Vfrac[self.AMORPH_ID, z, y, x]
                             
-                            crystal_theta = (crystal_theta + np.pi/2) % np.pi
-                            crystal_psi = (crystal_psi + np.pi/2) % (2 * np.pi)
+                            # Generate normalized random 3D vector
+                            random_orientation = np.random.normal(size=3)
+                            random_orientation /= np.linalg.norm(random_orientation)
+                            
+                            crystal_frac = mat_Vfrac[self.CRYSTAL_ID, z, y, x]
+                            crystal_theta = mat_theta[self.CRYSTAL_ID, z, y, x]
+                            crystal_psi = mat_psi[self.CRYSTAL_ID, z, y, x]
                             crystal_orientation = self.euler_to_cartesian(crystal_theta, crystal_psi)
-
-                        elif self.dopant_orientation == 'isotropic':
-                            dims = (rm.z_dim, rm.y_dim, rm.x_dim)
-                            params_psi = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2 * np.pi}
-                            params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2}  # u = cos(theta), uniformly distributed in [-1, 1]
-                            
-                            random_field_psi = generate_field_with_PSD(**params_psi)
-                            random_field_u = generate_field_with_PSD(**params_u)
-                            
-                            self.plot_field(random_field_psi, "psi")
-                            self.plot_field(random_field_u, "u")
-                            
-                            # Compute z, y, x from theta and u
-                            z = random_field_u
-                            y = np.sqrt(1 - random_field_u ** 2) * np.sin(random_field_psi)
-                            x = np.sqrt(1 - random_field_u ** 2) * np.cos(random_field_psi)
-                            
-                            # Convert to Euler angles
-                            theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
-                            
-                            dopant_mask = np.where(mat_Vfrac[self.DOPANT_ID] > 0)
-                            mat_theta[self.DOPANT_ID][dopant_mask] = theta[dopant_mask]
-                            mat_psi[self.DOPANT_ID][dopant_mask] = psi[dopant_mask]
+            
+                            if self.dopant_orientation == 'parallel':
+                                pass
+                            elif self.dopant_orientation == 'perpendicular':
+                                #orthogonal_vector = np.cross(crystal_orientation, [1, 0, 0])
+                                #orthogonal_vector /= np.linalg.norm(orthogonal_vector)  # Normalize
+                                #crystal_theta, crystal_psi = self.cartesian_to_euler(orthogonal_vector)
+                                
+                                crystal_theta = (crystal_theta + np.pi/2) % np.pi
+                                crystal_psi = (crystal_psi + np.pi/2) % (2 * np.pi)
+                                crystal_orientation = self.euler_to_cartesian(crystal_theta, crystal_psi)
 
         return mat_Vfrac, mat_S, mat_theta, mat_psi
     
