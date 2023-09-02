@@ -16,24 +16,6 @@ sys.path.append('/home/php/DopantModeling/')
 from NRSS.writer import write_materials, write_hdf5, write_config
 from PostProcessor import PostProcessor
 
-# Add fonts from custom directory
-font_files = font_manager.findSystemFonts(fontpaths = r'/home/php/Fonts')
-
-for font_file in font_files:
-    font_manager.fontManager.addfont(font_file)
-
-# Set plot parameters
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = 'Avenir'
-plt.rcParams['font.size'] = 18
-plt.rcParams['axes.linewidth'] = 2
-
-
-
-
-
-
-
 # Edge you want to find
 edge_to_find = 'C 1s'
 
@@ -64,11 +46,11 @@ density = {
 # PostProcessor Setup
 post_processor = PostProcessor(
     num_materials=4, mol_weight=mol_weight, density=density,
-    dope_case=0, dopant_method='preferential', dopant_orientation='parallel', 
-    dopant_vol_frac=10, crystal_dope_frac = 1,
+    dope_case=0, dopant_method='preferential', dopant_orientation='isotropic', 
+    dopant_vol_frac=0, crystal_dope_frac = 0.8,
     core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
     surface_roughness=False, height_feature=3, max_valley_nm=46, 
-    amorph_matrix_Vfrac=1, amorphous_orientation=False)
+    amorph_matrix_Vfrac=0.8, amorphous_orientation=True)
 
 # File I/O
 pickle_save_name = '/home/php/CyRSoXS/PyHyperScattering_Batch_SST1_JupyterHub.pkl'
@@ -117,6 +99,40 @@ def process_pickle_file(filename, post_processor):
     subprocess.run(['CyRSoXS', hdf5_filename])
 
     print(f"Finished processing pickle file: {filename}")
+
+# Gather a list of all .pickle files, excluding those in directories containing 'HDF5'
+pickle_files = []
+for root, dirs, files in os.walk('.'):
+    for filename in files:
+        if filename.endswith('.pickle') and 'HDF5' not in os.listdir(root):
+            full_path = os.path.abspath(os.path.join(root, filename))
+            pickle_files.append(full_path)
+
+# Process the gathered .pickle files
+for full_path in pickle_files:
+    root, filename = os.path.split(full_path)
+    print(f"Processing file: {filename}")
+
+    base_filename = os.path.splitext(filename)[0]
+    if os.path.basename(root) == base_filename:
+        print(f"{filename} is already in a directory with a matching name")
+        os.chdir(root)
+        print(f"Changed working directory to: {root}")
+        process_pickle_file(filename, post_processor)
+        continue
+
+    new_directory = os.path.join(root, base_filename)
+    os.makedirs(new_directory, exist_ok=True)
+    print(f"Created directory: {new_directory}")
+    new_path = os.path.abspath(os.path.join(new_directory, filename))
+    shutil.move(full_path, new_path)
+    print(f"Moved {filename} to {new_path}")
+
+    os.chdir(new_directory)
+    print(f"Changed working directory to: {new_directory}")
+    process_pickle_file(filename, post_processor)
+
+    print(f"Finished processing pickle file: {filename}")
     
     file_loader = PyHyperScattering.load.cyrsoxsLoader()
     
@@ -156,7 +172,7 @@ def process_pickle_file(filename, post_processor):
     cbar.ax.set_ylabel('Anisotropy')
     
     fig.suptitle(f'Simulation C 1s Edge', fontsize = 20, y = 1, x = 0.5)
-    ax.set_xlabel('$\it{q}$ (Ãƒâ€¦$^{-1}$)')
+    ax.set_xlabel(r'$\it{q}$ ($\text{\AA}^{-1}$)')
     ax.set_ylabel('Energy (eV)')
     ax.set_xlim([start_q, end_q])
     ax.set_xticks([0.01, 0.03, 0.05, 0.07, 0.09], ['', '0.03', '0.05', '0.07', '0.09'])
