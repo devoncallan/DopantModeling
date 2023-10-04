@@ -47,21 +47,6 @@ class Morphology:
         self.initialize_box()
         
         self.fibrils = []        
-                
-        # # Material 1 - P3HT
-        # self.mat1_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        # self.mat1_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        # self.mat1_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        # self.mat1_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-
-        # # Stores RGB values at each voxel (for morphology movie)
-        # self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 3))
-
-        # # Material 2 - Vacuum 
-        # self.mat2_Vfrac = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        # self.mat2_S     = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        # self.mat2_theta = np.zeros((self.z_dim, self.y_dim, self.x_dim))
-        # self.mat2_psi   = np.zeros((self.z_dim, self.y_dim, self.x_dim))
 
     def initialize_box(self):
         """Initialize voxelized box and bounding box
@@ -141,75 +126,35 @@ class Morphology:
         self.k = k
         self.std = std
         self.theta_sigma = theta_sigma
-
-        if theta_distribution_csv is not None:
-            # Load data from CSV
-            df = pd.read_csv(theta_distribution_csv)
-            
-            # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
-            df = df.dropna()
-            df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
-            
-            # Get theta values and percentages
-            chi_values = df['theta'].values
-            percentages = df['percentage'].values
-            
-            # Fit the Gaussian function to the histogram data
-            params_new, _ = curve_fit(self.gaussian, chi_values / 180 * np.pi, percentages, p0=[np.pi/5, max(percentages)])
-            
-            # Extract fitted parameters
-            theta_sigma_fit, theta_scale_fit = params_new
-            
-            # Generate fitted curve
-            fit_x = np.linspace(0, np.pi, 101)
-            fit_y = self.gaussian(fit_x, theta_sigma_fit, theta_scale_fit)
-            
-             # Create figure and axis objects
-            fig, ax = plt.subplots(figsize=(10, 5))
-            
-            # Plot the original and fitted data on the axes
-            ax.plot(chi_values / 180 * np.pi, percentages, '-', color='black', linewidth=2, label='Original Data')
-            ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
-            
-            # Add labels and title
-            ax.set_xlabel('Theta (degrees)')
-            ax.set_ylabel('Frequency')
-            ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
-            
-            # Show legend
-            ax.legend()
-            
-            plt.show()
-            
-            self.theta_sigma_fit = theta_sigma_fit
-            print('Generating theta field from fit sigma...')
-            self.generate_theta_field(normalization_type='psd', new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
-            
-            # Return figure and axis
-            return fig, ax
-        else:
-            print('Generating theta field...')
-            self.generate_theta_field(normalization_type='psd', new_mean=90, new_std=np.sqrt(self.theta_sigma_fit))
+        self.theta_distribution_csv = theta_distribution_csv
             
     def get_random_point(self):
         return self.dims * np.random.rand(3)
     
     def get_random_direction(self, point):
+        # Ensure the point is a valid index
+        if len(point) != 3:
+            raise ValueError("Expected point to be a 3-element array for indexing into 3D reference arrays.")
+
         if self.rand_orientation==0:
             theta = np.random.normal(90,30)/180 * np.pi
-            phi = np.random.uniform(0,np.pi)
-            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+            psi = np.random.uniform(0,np.pi)
         elif self.rand_orientation==1:
             theta = (90 + np.random.normal(0, 1.0))/180 * np.pi
-            phi   = np.random.uniform(0, np.pi)
-            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
-            # direction = np.random.rand(3)
+            psi   = np.random.uniform(0, np.pi)
         elif self.rand_orientation==2:
             # use random theta close to/in plane of film
             theta = np.random.normal(90,30)/180 * np.pi
             # use arrays to 'lookup' the pregenerated angles at the point
-            phi = self.phi_ref[point.astype(int)]
-            direction = np.asarray([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)])
+            psi = self.psi_ref[tuple(point.astype(int))]
+        elif self.rand_orientation==3:
+            # use arrays to 'lookup' the pregenerated angles at the point
+            theta = self.theta_ref[tuple(point.astype(int))]
+           # print(theta)
+            psi = self.psi_ref[tuple(point.astype(int))]
+           # print(psi)
+           
+        direction = np.asarray([np.sin(theta)*np.cos(psi), np.sin(theta)*np.sin(psi), np.cos(theta)])
         return direction / np.linalg.norm(direction)
             
     def generate_psi_field(self, normalization_type='cdf', new_mean=None, new_std=None):
@@ -218,7 +163,7 @@ class Morphology:
     def generate_theta_field(self, normalization_type='psd', new_mean=np.pi/2, new_std=np.pi/5):
         self.theta_ref = generate_field_with_PSD(self.k, self.std, self.dims, np.pi, normalization_type=normalization_type, new_mean=new_mean, new_std=new_std)
 
-    def plot_field(self, field_type = 'psi'):
+    def plot_field(self, field_type='psi'):
         if field_type == 'psi':
             field_ref = self.psi_ref
             field_name = 'Psi'
@@ -229,13 +174,16 @@ class Morphology:
             warnings.warn(f"Invalid field_type '{field_type}'. Use either 'theta' or 'psi'.")
             return
 
-        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+        fig, ax = plt.subplots(1, 3, figsize=(15, 5))  # Added one more axis for the PSDF
 
         # If field_ref is 3D, take a 2D slice for plotting
         field_data_to_plot = field_ref[:, :, 0] if len(field_ref.shape) == 3 else field_ref
 
         # Plot the field
-        im = ax[0].imshow(field_data_to_plot, cmap='viridis', origin='lower')
+        extent_vals = [0, self.x_dim_nm, 0, self.y_dim_nm]  # x and y dimensions in nm
+        im = ax[0].imshow(field_data_to_plot, cmap='viridis', origin='lower', extent=extent_vals)
+        ax[0].set_xlabel('Distance (nm)')
+        ax[0].set_ylabel('Distance (nm)')
         fig.colorbar(im, ax=ax[0], label=f'{field_name} Value')
         ax[0].set_title(f'Generated {field_name} Field')
 
@@ -244,6 +192,26 @@ class Morphology:
         ax[1].set_title(f'Histogram of {field_name} Values')
         ax[1].set_xlabel(f'{field_name} Value')
         ax[1].set_ylabel('Frequency')
+
+        # Compute 2D Power Spectral Density
+        f_transform = np.fft.fft2(field_data_to_plot - field_data_to_plot.mean())
+        psd2D = np.abs(f_transform)**2
+        psd2D_shifted = np.fft.fftshift(psd2D)
+
+        # Radial averaging for PSDF
+        y, x = np.indices(psd2D_shifted.shape)
+        center = np.array([(x.max() - x.min()) / 2.0, (y.max() - y.min()) / 2.0])
+        r = np.sqrt((x - center[0]) ** 2 + (y - center[1]) ** 2)
+        r = r.astype(int)
+        radial_profile = np.bincount(r.ravel(), psd2D_shifted.ravel()) / np.bincount(r.ravel())
+        freq_res = 1 / (self.x_dim_nm * 10)  # Convert nm to Å for frequency calculation
+        radius_values = np.arange(radial_profile.size) * freq_res
+
+        ax[2].plot(radius_values, radial_profile)
+        ax[2].set_yscale('log')
+        ax[2].set_xlabel('Spatial Frequency (Å$^{-1}$)')
+        ax[2].set_ylabel('Power Spectrum')
+        ax[2].set_title('Radial PSDF')
 
         plt.tight_layout()
         return fig, ax
@@ -311,9 +279,56 @@ class Morphology:
             print('Generating psi field...')
             self.generate_psi_field()
         
-        if self.rand_orientation >3:
+        if (self.theta_distribution_csv is not None) and (self.rand_orientation >= 3):
+            # Load data from CSV
+            df = pd.read_csv(self.theta_distribution_csv)
+            
+            # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
+            df = df.dropna()
+            df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
+            
+            # Get theta values and percentages
+            chi_values = df['theta'].values
+            percentages = df['percentage'].values
+            
+            # Fit the Gaussian function to the histogram data
+            params_new, _ = curve_fit(self.gaussian, chi_values / 180 * np.pi, percentages, p0=[np.pi/5, max(percentages)])
+            
+            # Extract fitted parameters
+            theta_sigma_fit, theta_scale_fit = params_new
+            
+            # Generate fitted curve
+            fit_x = np.linspace(0, np.pi, 101)
+            fit_y = self.gaussian(fit_x, theta_sigma_fit, theta_scale_fit)
+            
+             # Create figure and axis objects
+            fig, ax = plt.subplots(figsize=(10, 5))
+            
+            # Plot the original and fitted data on the axes
+            ax.plot(chi_values / 180 * np.pi, percentages, '-', color='black', linewidth=2, label='Original Data')
+            ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
+            
+            # Add labels and title
+            ax.set_xlabel('Theta (degrees)')
+            ax.set_ylabel('Frequency')
+            ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
+            
+            # Show legend
+            ax.legend()
+            
+            plt.show()
+            
+            self.theta_sigma_fit = theta_sigma_fit
+            print('Generating theta field from fit sigma...')
+            self.generate_theta_field(normalization_type='psd', new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
+            
+            # Return figure and axis
+            # return fig, ax
+        elif self.rand_orientation >= 3:
             print('Generating theta field...')
-            self.generate_theta_field()
+            self.generate_theta_field(normalization_type='psd')
+        else:
+            print('random theta sampling...')
 
         def create_fibril():
             # Initialize a new fibril 
@@ -365,20 +380,6 @@ class Morphology:
         for i in range(len(self.fibrils)):
             self.fibrils[i].set_random_orientation()
 
-    # def create_material_matrices (self):
-    #     self.mat1_orientation = np.zeros((self.z_dim, self.y_dim, self.x_dim, 4))
-    #     for fibril in self.fibrils:
-    #         indices = np.array(fibril.voxel_mesh.vertices, dtype=int)
-    #         for index in indices:
-    #             index = np.flip(index)
-    #             if index[0] < self.z_dim and index[1] < self.y_dim and index[2] < self.x_dim:
-    #                 self.mat1_Vfrac[tuple(index)] = 1
-    #                 self.mat1_S[tuple(index)] = 1
-    #                 self.mat1_theta[tuple(index)] = fibril.orientation_theta
-    #                 self.mat1_psi[tuple(index)] = fibril.orientation_psi
-    #                 self.mat1_orientation[tuple(index)] = [fibril.color[0], fibril.color[1], fibril.color[2], 1]
-    #     self.mat2_Vfrac = 1 - self.mat1_Vfrac  
-
     def get_scene(self, show_voxelized=False, show_bounding_box=False):
 
         scene_mesh_list = []
@@ -391,18 +392,7 @@ class Morphology:
         if show_bounding_box:
             scene_mesh_list.append(self.bounding_path)
         return trimesh.Scene(scene_mesh_list)
-    
-    # def get_morphology_movie(self):
-    #     fig = plt.figure(dpi=300)
-    #     def update_fig(i):
-    #         fig.clear()
-    #         plt.imshow(self.mat1_orientation[i,:,:,:])
-    #     anim = animation.FuncAnimation(fig, update_fig, self.z_dim)
-    #     anim.save("Morphology.mp4", fps=16)
-    #     plt.close()
 
-    # def analyze_crystallinity(self):
-    #     return None
 
     def plot_fibril_histogram(self):
         # Extracting lengths, radii, orientations theta, and orientations psi from fibrils

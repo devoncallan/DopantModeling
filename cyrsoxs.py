@@ -172,7 +172,7 @@ for full_path in pickle_files:
     cbar.ax.set_ylabel('Anisotropy')
     
     fig.suptitle(f'Simulation C 1s Edge', fontsize = 20, y = 1, x = 0.5)
-    ax.set_xlabel(r'$\it{q}$ ($\text{\AA}^{-1}$)')
+    ax.set_xlabel(r'$\it{q}$ (A$^{-1}$)')
     ax.set_ylabel('Energy (eV)')
     ax.set_xlim([start_q, end_q])
     ax.set_xticks([0.01, 0.03, 0.05, 0.07, 0.09], ['', '0.03', '0.05', '0.07', '0.09'])
