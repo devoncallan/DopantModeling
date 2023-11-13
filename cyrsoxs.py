@@ -1,10 +1,12 @@
 import pickle
+import re
 import os
 import sys
 import shutil
 import subprocess
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import interp1d
 from matplotlib import ticker
 import PyHyperScattering
 from matplotlib import font_manager
@@ -13,55 +15,80 @@ from matplotlib import font_manager
 sys.path.append('/home/php/NRSS/')
 sys.path.append('/home/php/DopantModeling/')
 
+font_dirs = ['/home/php/Fonts']
+font_files = font_manager.findSystemFonts(fontpaths = font_dirs)
+
+for font_file in font_files:
+    font_manager.fontManager.addfont(font_file)
+
+# font_names = [f.name for f in font_manager.fontManager.ttflist]
+# print(font_names)
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = 'Avenir'
+plt.rcParams['font.size'] = 18
+plt.rcParams['axes.linewidth'] = 2
+
 from NRSS.writer import write_materials, write_hdf5, write_config
 from PostProcessor import PostProcessor
 
-# Edge you want to find
-edge_to_find = 'C 1s'
+def update_mol_weight_for_dopant(root, mol_weight):
+    if 'TFSI' in root:
+        mol_weight[DOPANT_ID] = 280.14  # Molecular weight of TFSI-
+    elif 'F4TCNQ' in root:
+        mol_weight[DOPANT_ID] = 276.15  # Molecular weight of F4TCNQ
+    else:
+        print(f"No known dopant type found in directory: {root}")
+        mol_weight[DOPANT_ID] = 280.14  # Molecular weight of TFSI-
+    return mol_weight
 
-# Material Definitions
-material_dict = {
-    'Material1': 'vacuum', 
-    'Material2': '/home/php/DopantModeling/xspectra_refractive_indices/P3HT_database_C_Kedge.txt', 
-    'Material3': '/home/php/DopantModeling/xspectra_refractive_indices/P3HT_database_C_Kedge_isotropic.txt',
-    'Material4': '/home/php/DopantModeling/xspectra_refractive_indices/TFSI_2_C_Kedge.txt'
-}
+def read_crystalline_mol_frac_from_file(file_path):
+    with open(file_path, 'r') as f:
+        for line in f:
+            if 'Crystalline Mole Fraction:' in line:
+                return float(re.findall("\d+\.\d+", line)[0])
+    return None
 
-energy_dict = {'Energy': 6, 'DeltaPerp': 3, 'BetaPerp': 1, 'DeltaPara': 2, 'BetaPara': 0}
+def interpolate_dopant_vol_frac_TFSI(crystalline_mol_frac):
+    x = np.array([0.17, 0.22, 0.27, 0.29, 0.37])
+    y = np.array([0.019, 0.053, 0.049, 0.067, 0.096])
+    f = interp1d(x, y, fill_value="extrapolate")
+    return f(crystalline_mol_frac)
 
-VACUUM_ID, CRYSTAL_ID, AMORPH_ID, DOPANT_ID = 0, 1, 2, 3
+def interpolate_dopant_vol_frac_F4TCNQ(crystalline_mol_frac):
+    x = np.array([0.17, 0.22, 0.27, 0.29, 0.37])
+    y = np.array([0.0242, 0.0242, 0.0242, 0.0242, 0.0242])
+    f = interp1d(x, y, fill_value="extrapolate")
+    return f(crystalline_mol_frac)
 
-mol_weight = {
-    CRYSTAL_ID: 166.2842, # Molecular weight of crystalline P3HT repeat
-    AMORPH_ID: 166.2842,  # Molecular weight of amorphous P3HT repeat
-    DOPANT_ID: 280.14     # Molecular weight of TFSI- = 280.14, Molecular weight of F4TCNQ = 276.15
-}
+def generate_material_dict(root):
+    base_path = '/home/php/DopantModeling/xspectra_refractive_indices/'
+    material_dict = {
+        'Material1': 'vacuum',
+        'Material2': '/home/php/DopantModeling/xspectra_refractive_indices/interp_P3HT_database_kkcalc_merge.txt',
+        'Material3': '/home/php/DopantModeling/xspectra_refractive_indices/interp_P3HT_database_kkcalc_merge_isotropic.txt'
+    }
 
-density = {
-    CRYSTAL_ID: 1.1, # Density of crystalline P3HT
-    AMORPH_ID: 1.1,  # Density of amorphous P3HT
-    DOPANT_ID: 1.1   # Density of dopant in P3HT
-}
+    if 'TFSI' in root:
+        material_name = 'TFSI_2_'
+    elif 'F4TCNQ' in root:
+        material_name = 'Reduced_F4TCNQ_'
+    else:
+        print(f"No known dopant type found in directory: {root}")
+        material_name = 'TFSI_2_'
 
-# PostProcessor Setup
-post_processor = PostProcessor(
-    num_materials=4, mol_weight=mol_weight, density=density,
-    dope_case=0, dopant_method='preferential', dopant_orientation='isotropic', 
-    dopant_vol_frac=0, crystal_dope_frac = 0.8,
-    core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
-    surface_roughness=False, height_feature=3, max_valley_nm=46, 
-    amorph_matrix_Vfrac=0.8, amorphous_orientation=True)
+    for element in ['_C_', '_N_', '_F_']:
+        if element in root:
+            material_name += element.strip('_') + '_'
+            break
 
-# File I/O
-pickle_save_name = '/home/php/CyRSoXS/PyHyperScattering_Batch_SST1_JupyterHub.pkl'
+    material_name += 'Kedge'
 
-# Load Data
-with open(pickle_save_name, 'rb') as file:
-    data = pickle.load(file)
-data_dict = {'scan_ids': data[0], 'sample_names': data[1], 'edges': data[2], 'ARs': data[3], 'paras': data[4], 'perps': data[5], 'circs': data[6], 'FY_NEXAFSs': data[7], 'Iq2s': data[8], 'ISIs': data[9]}
-indices = [index for index, edge in enumerate(data_dict['edges']) if edge == edge_to_find]
-energies = [data_dict['ARs'][index].energy for index in indices]
-energies = energies[0].values[1:]
+    if 'Para' not in root and 'Perp' not in root:
+        material_name += '_isotropic'
+
+    material_dict['Material4'] = base_path + material_name + '.txt'
+
+    return material_dict
 
 def process_pickle_file(filename, post_processor):
     print(f"Starting processing of pickle file: {filename}")
@@ -100,6 +127,31 @@ def process_pickle_file(filename, post_processor):
 
     print(f"Finished processing pickle file: {filename}")
 
+
+energy_dict = {'Energy': 6, 'DeltaPerp': 3, 'BetaPerp': 1, 'DeltaPara': 2, 'BetaPara': 0}
+
+VACUUM_ID, CRYSTAL_ID, AMORPH_ID, DOPANT_ID = 0, 1, 2, 3
+
+default_mol_weight = {
+    CRYSTAL_ID: 166.2842, # Molecular weight of crystalline P3HT repeat
+    AMORPH_ID: 166.2842,  # Molecular weight of amorphous P3HT repeat
+    DOPANT_ID: 276.15     # Molecular weight of TFSI- = 280.14, Molecular weight of F4TCNQ = 276.15
+}
+
+density = {
+    CRYSTAL_ID: 1.1, # Density of crystalline P3HT
+    AMORPH_ID: 1.1,  # Density of amorphous P3HT
+    DOPANT_ID: 1.1   # Density of dopant in P3HT
+}
+
+# File I/O
+pickle_save_name = '/home/php/CyRSoXS/PyHyperScattering_Batch_SST1_JupyterHub.pkl'
+
+# Load Data
+with open(pickle_save_name, 'rb') as file:
+    data = pickle.load(file)
+data_dict = {'scan_ids': data[0], 'sample_names': data[1], 'edges': data[2], 'ARs': data[3], 'paras': data[4], 'perps': data[5], 'circs': data[6], 'FY_NEXAFSs': data[7], 'Iq2s': data[8], 'ISIs': data[9]}
+
 # Gather a list of all .pickle files, excluding those in directories containing 'HDF5'
 pickle_files = []
 for root, dirs, files in os.walk('.'):
@@ -114,6 +166,30 @@ for full_path in pickle_files:
     print(f"Processing file: {filename}")
 
     base_filename = os.path.splitext(filename)[0]
+    
+    params_file_path = os.path.join(root, "Parameters_" + base_filename + ".txt")
+    crystalline_mol_frac = read_crystalline_mol_frac_from_file(params_file_path)
+
+    # Path-dependent configurations
+    edge_to_find = 'C 1s' if 'C_K_Edge' in root else 'N 1s' if 'N_K_Edge' in root else 'F 1s' if 'F_K_Edge' in root else 'C 1s'
+    indices = [index for index, edge in enumerate(data_dict['edges']) if edge == edge_to_find]
+    energies = [data_dict['ARs'][index].energy for index in indices]
+    energies = energies[0].values[1:]
+    dopant_vol_frac = interpolate_dopant_vol_frac_TFSI(crystalline_mol_frac) if 'TFSI' in root else interpolate_dopant_vol_frac_F4TCNQ(crystalline_mol_frac) if 'F4TCNQ' in root else 0.0
+    material_dict = generate_material_dict(root)
+    mol_weight = update_mol_weight_for_dopant(root, default_mol_weight.copy())
+    dopant_orientation = 'perpendicular' if 'Perp' in root else 'parallel' if 'Para' in root else 'isotropic'
+    crystal_dope_frac = 1 if 'Fibril' in root else 0 if 'Matrix' in root else 0.5
+        
+    # Initialize the PostProcessor with the new dopant_vol_frac
+    post_processor = PostProcessor(
+        num_materials=4, mol_weight=mol_weight, density=density,
+        dope_case=1, dopant_method='preferential', dopant_orientation=dopant_orientation, 
+        dopant_vol_frac=dopant_vol_frac, crystal_dope_frac=crystal_dope_frac,
+        core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
+        surface_roughness=False, height_feature=3, max_valley_nm=46, 
+        amorph_matrix_Vfrac=0.9, amorphous_orientation=True)
+
     if os.path.basename(root) == base_filename:
         print(f"{filename} is already in a directory with a matching name")
         os.chdir(root)
@@ -138,19 +214,20 @@ for full_path in pickle_files:
     
     scan = file_loader.loadDirectory('.')
     
+    # Add your start_q, end_q, start_en, end_en values
+    start_q = 0.01  # Replace with your actual start value for q
+    end_q = 0.09  # Replace with your actual end value for q
+    
+    # Energy range based on the directory name
+    start_en, end_en = (280, 292) if 'C_K_Edge' in root else (395, 405) if 'N_K_Edge' in root else (670, 709)
+
     integ = PyHyperScattering.integrate.WPIntegrator()
     integrated_data = integ.integrateImageStack(scan)
-    integrated_data = integrated_data.sel(energy=slice(280, 292), q=slice(0, 0.1))
-    
-    # Add your start_q, end_q, start_en, end_en values
-    start_q = 0  # Replace with your actual start value for q
-    end_q = 0.1  # Replace with your actual end value for q
-    start_en = 280  # Replace with your actual start value for energy
-    end_en = 292  # Replace with your actual end value for energy
+    integrated_data = integrated_data.sel(energy=slice(395, 405), q=slice(0.01, 0.09))
     
     # Continue with your existing plotting code
-    para = integrated_data.rsoxs.slice_chi(0, chi_width=45).sel(q=slice(start_q, end_q))
-    perp = integrated_data.rsoxs.slice_chi(90, chi_width=45).sel(q=slice(start_q, end_q))
+    para = integrated_data.rsoxs.slice_chi(90, chi_width=45).sel(q=slice(start_q, end_q))
+    perp = integrated_data.rsoxs.slice_chi(0, chi_width=45).sel(q=slice(start_q, end_q))
     
     AR = (para - perp) / (para + perp)
     
@@ -161,7 +238,7 @@ for full_path in pickle_files:
         ax = ax,
         #vmin = -np.nanpercentile(AR,95),
         #vmax = np.nanpercentile(AR,95),
-        cmap = 'RdBu',
+        cmap = 'RdBu_r',
         add_colorbar = False)
     
     cbar_ax = fig.add_axes([0.975, 0.145, 0.03, 0.715])
@@ -175,7 +252,7 @@ for full_path in pickle_files:
     ax.set_xlabel(r'$\it{q}$ (A$^{-1}$)')
     ax.set_ylabel('Energy (eV)')
     ax.set_xlim([start_q, end_q])
-    ax.set_xticks([0.01, 0.03, 0.05, 0.07, 0.09], ['', '0.03', '0.05', '0.07', '0.09'])
+    ax.set_xticks([0.01, 0.03, 0.05, 0.07, 0.09], ['', '0.03', '0.05', '0.07', ''])
     ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.0f'))
     ax.set_ylim([start_en, end_en])
     

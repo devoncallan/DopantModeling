@@ -174,7 +174,7 @@ class Morphology:
             warnings.warn(f"Invalid field_type '{field_type}'. Use either 'theta' or 'psi'.")
             return
 
-        fig, ax = plt.subplots(1, 3, figsize=(15, 5))  # Added one more axis for the PSDF
+        fig, ax = plt.subplots(1, 3, figsize=(3.5*3, 3),dpi=100)
 
         # If field_ref is 3D, take a 2D slice for plotting
         field_data_to_plot = field_ref[:, :, 0] if len(field_ref.shape) == 3 else field_ref
@@ -309,7 +309,7 @@ class Morphology:
             ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
             
             # Add labels and title
-            ax.set_xlabel('Theta (degrees)')
+            ax.set_xlabel('Theta (rad)')
             ax.set_ylabel('Frequency')
             ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
             

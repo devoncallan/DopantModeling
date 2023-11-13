@@ -34,7 +34,7 @@ class PostProcessor:
     DOPANT_ID = 3
 
     def __init__(self, num_materials=4, mol_weight=None, density=None,
-                 dope_case=1, dopant_method='random', dopant_orientation=None, dopant_vol_frac=0.0825, crystal_dope_frac=0.5,
+                 dope_case=1, dopant_method='preferential', dopant_orientation=None, dopant_vol_frac=0.0825, crystal_dope_frac=0.5,
                  core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
                  surface_roughness=False, height_feature=3, max_valley_nm=46, 
                  amorph_matrix_Vfrac=0.9, amorphous_orientation=True):
@@ -533,6 +533,7 @@ class PostProcessor:
                     f.write(f"    Preferential Dopant Method Details:\n")
                     f.write(f"        Fraction of dopant in crystalline regions: {self.crystal_dope_frac}\n")
                     f.write(f"        Fraction of dopant in amorphous regions: {1 - self.crystal_dope_frac}\n")
+                    f.write(f"    Dopant orientation (relative to P3HT C 1s -> π* TDM): {self.dopant_orientation}\n")
                     
             # Other details
             f.write("\nAdditional Parameters:\n")
