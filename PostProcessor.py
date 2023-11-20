@@ -278,22 +278,16 @@ class PostProcessor:
     
         if self.dopant_orientation == 'isotropic':
             dims = (rm.z_dim, rm.y_dim, rm.x_dim)
+            
+            # Psi uniformly distributed in [0, 2π]
             params_psi = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2 * np.pi}
-            params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2}  # u = cos(theta), uniformly distributed in [-1, 1]
+            psi = generate_field_with_PSD(**params_psi)
+            psi = np.mod(psi, 2 * np.pi)  # Ensure range [0, 2π]
             
-            random_field_psi = generate_field_with_PSD(**params_psi)
-            random_field_u = generate_field_with_PSD(**params_u)
-            
-            self.plot_field(random_field_psi, "psi")
-            self.plot_field(random_field_u, "u")
-            
-            # Compute z, y, x from theta and u
-            z = random_field_u
-            y = np.sqrt(1 - random_field_u ** 2) * np.sin(random_field_psi)
-            x = np.sqrt(1 - random_field_u ** 2) * np.cos(random_field_psi)
-            
-            # Convert to Euler angles
-            theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
+            # u uniformly distributed in [-1, 1], then convert to theta
+            params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2} 
+            u = generate_field_with_PSD(**params_u)
+            theta = np.arccos(u)  # Convert to theta
             
             mat_theta[self.DOPANT_ID][dopant_mask] = theta[dopant_mask]
             mat_psi[self.DOPANT_ID][dopant_mask] = psi[dopant_mask]
@@ -320,22 +314,20 @@ class PostProcessor:
     
     def set_amorphous_orientation(self, rm, mat_Vfrac, mat_S, mat_theta, mat_psi):
         dims = (rm.z_dim, rm.y_dim, rm.x_dim)
+
+        # Psi uniformly distributed in [0, 2π]
         params_psi = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2 * np.pi}
-        params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2}  # u = cos(theta), uniformly distributed in [-1, 1]
+        psi = generate_field_with_PSD(**params_psi)
+        psi = np.mod(psi, 2 * np.pi)  # Ensure range [0, 2π]
         
-        random_field_psi = generate_field_with_PSD(**params_psi)
-        random_field_u = generate_field_with_PSD(**params_u)
-        
-        self.plot_field(random_field_psi, "psi")
-        self.plot_field(random_field_u, "u")
-        
-        # Compute z, y, x from theta and u
-        z = random_field_u
-        y = np.sqrt(1 - random_field_u ** 2) * np.sin(random_field_psi)
-        x = np.sqrt(1 - random_field_u ** 2) * np.cos(random_field_psi)
-        
-        # Convert to Euler angles
-        theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
+        # u uniformly distributed in [-1, 1], then convert to theta
+        params_u = {'k': 1, 'std': 1.0, 'dims': dims, 'max_value': 2} 
+        u = generate_field_with_PSD(**params_u)
+        theta = np.arccos(u)  # Convert to theta
+    
+        self.plot_field(psi, "psi")
+        self.plot_field(u, "u")
+        self.plot_field(theta, "theta")
         
         amorph_mask = np.where(mat_Vfrac[self.AMORPH_ID] > 0)
         mat_S[self.AMORPH_ID][amorph_mask] = 1
