@@ -163,7 +163,7 @@ for root, dirs, files in os.walk('.'):
 # Process the gathered .pickle files
 for full_path in pickle_files:
     root, filename = os.path.split(full_path)
-    print(f"Processing file: {filename}")
+    print(f"\nProcessing file: {filename} in directory: {root}")
 
     base_filename = os.path.splitext(filename)[0]
     
@@ -176,10 +176,16 @@ for full_path in pickle_files:
     energies = [data_dict['ARs'][index].energy for index in indices]
     energies = energies[0].values[1:]
     dopant_vol_frac = interpolate_dopant_vol_frac_TFSI(crystalline_mol_frac) if 'TFSI' in root else interpolate_dopant_vol_frac_F4TCNQ(crystalline_mol_frac) if 'F4TCNQ' in root else 0.0
-    material_dict = generate_material_dict(root)
     mol_weight = update_mol_weight_for_dopant(root, default_mol_weight.copy())
+    
+    material_dict = generate_material_dict(root)
+    print(f"Generated material_dict: {material_dict}")
+    
     dopant_orientation = 'perpendicular' if 'Perp' in root else 'parallel' if 'Para' in root else 'isotropic'
+    print(f"Set dopant orientation to: {dopant_orientation}")
+    
     crystal_dope_frac = 1 if 'Fibril' in root else 0 if 'Matrix' in root else 0.5
+    print(f"Set crystal dope fraction to: {crystal_dope_frac}")
         
     # Initialize the PostProcessor with the new dopant_vol_frac
     post_processor = PostProcessor(
@@ -223,7 +229,7 @@ for full_path in pickle_files:
 
     integ = PyHyperScattering.integrate.WPIntegrator()
     integrated_data = integ.integrateImageStack(scan)
-    integrated_data = integrated_data.sel(energy=slice(395, 405), q=slice(0.01, 0.09))
+    integrated_data = integrated_data.sel(energy=slice(start_en, end_en), q=slice(0.01, 0.09))
     
     # Continue with your existing plotting code
     para = integrated_data.rsoxs.slice_chi(90, chi_width=45).sel(q=slice(start_q, end_q))

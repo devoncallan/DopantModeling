@@ -33,17 +33,17 @@ density = {
 }
 
 # Loop through a range of fibril numbers
-for num_fibrils in range(250, 251, 250):
+for num_fibrils in range(250, 100001, 250):
     # Initialize morphology
     morphology = Morphology(x_dim_nm, y_dim_nm, z_dim_nm, pitch_nm)
     morphology.set_model_parameters(radius_nm_avg = 15,
                                     radius_nm_std = 3,
                                     max_num_fibrils = num_fibrils,
-                                    fibril_length_range_nm = [100, 400],
+                                    fibril_length_range_nm = [50, 200],
                                     rand_orientation = 3, # sample psi and theta using gaussian random fields
-                                    theta_distribution_csv = r'/home/php/DopantModeling/theta_distributions/EPAN_0p1_theta_distribution.csv',
-                                    k = 1,
-                                    std = 1)
+                                    theta_distribution_csv = r'/home/php/DopantModeling/theta_distributions/avg_0p1_theta_distribution.csv',
+				    k = 1/2.5,
+                                    std = 1/12.5)
     
     morphology.fill_model(timeout = 360, plot_histogram=False)
     morphology.voxelize_model()
