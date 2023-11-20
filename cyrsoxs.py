@@ -15,21 +15,15 @@ from matplotlib import font_manager
 sys.path.append('/home/php/NRSS/')
 sys.path.append('/home/php/DopantModeling/')
 
-font_dirs = ['/home/php/Fonts']
-font_files = font_manager.findSystemFonts(fontpaths = font_dirs)
-
-for font_file in font_files:
-    font_manager.fontManager.addfont(font_file)
-
-# font_names = [f.name for f in font_manager.fontManager.ttflist]
-# print(font_names)
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = 'Avenir'
-plt.rcParams['font.size'] = 18
-plt.rcParams['axes.linewidth'] = 2
-
 from NRSS.writer import write_materials, write_hdf5, write_config
 from PostProcessor import PostProcessor
+
+def generate_ticks(start, end, num_ticks, rounding_order):
+    tick_spacing = (end - start) / (num_ticks - 1)
+    tick_vals = [start + i * tick_spacing for i in range(num_ticks)]
+    rounded_tick_vals = [round(val / rounding_order) * rounding_order for val in tick_vals]
+    
+    return rounded_tick_vals
 
 def update_mol_weight_for_dopant(root, mol_weight):
     if 'TFSI' in root:
@@ -215,56 +209,3 @@ for full_path in pickle_files:
     process_pickle_file(filename, post_processor)
 
     print(f"Finished processing pickle file: {filename}")
-    
-    file_loader = PyHyperScattering.load.cyrsoxsLoader()
-    
-    scan = file_loader.loadDirectory('.')
-    
-    # Add your start_q, end_q, start_en, end_en values
-    start_q = 0.01  # Replace with your actual start value for q
-    end_q = 0.09  # Replace with your actual end value for q
-    
-    # Energy range based on the directory name
-    start_en, end_en = (280, 292) if 'C_K_Edge' in root else (395, 405) if 'N_K_Edge' in root else (670, 709)
-
-    integ = PyHyperScattering.integrate.WPIntegrator()
-    integrated_data = integ.integrateImageStack(scan)
-    integrated_data = integrated_data.sel(energy=slice(start_en, end_en), q=slice(0.01, 0.09))
-    
-    # Continue with your existing plotting code
-    para = integrated_data.rsoxs.slice_chi(90, chi_width=45).sel(q=slice(start_q, end_q))
-    perp = integrated_data.rsoxs.slice_chi(0, chi_width=45).sel(q=slice(start_q, end_q))
-    
-    AR = (para - perp) / (para + perp)
-    
-    fig, ax = plt.subplots(1, 1, figsize=(3.5, 3.5))
-    
-    im_cbar = AR.sel(energy = slice(start_en, end_en)).plot(
-        x = 'q', y = 'energy',
-        ax = ax,
-        #vmin = -np.nanpercentile(AR,95),
-        #vmax = np.nanpercentile(AR,95),
-        cmap = 'RdBu_r',
-        add_colorbar = False)
-    
-    cbar_ax = fig.add_axes([0.975, 0.145, 0.03, 0.715])
-    cbar = fig.colorbar(im_cbar, cax = cbar_ax)
-    
-    # plt.setp(cbar.ax.get_yticklabels(), ha = "right")
-    # cbar.ax.tick_params(pad = 37.5)
-    cbar.ax.set_ylabel('Anisotropy')
-    
-    fig.suptitle(f'Simulation C 1s Edge', fontsize = 20, y = 1, x = 0.5)
-    ax.set_xlabel(r'$\it{q}$ (A$^{-1}$)')
-    ax.set_ylabel('Energy (eV)')
-    ax.set_xlim([start_q, end_q])
-    ax.set_xticks([0.01, 0.03, 0.05, 0.07, 0.09], ['', '0.03', '0.05', '0.07', ''])
-    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.0f'))
-    ax.set_ylim([start_en, end_en])
-    
-    ax.xaxis.set_tick_params(which = 'major', size = 5, width = 2, direction = 'in', top = 'on')
-    ax.xaxis.set_tick_params(which = 'minor', size = 2.5, width = 2, direction = 'in', top = 'on')
-    ax.yaxis.set_tick_params(which = 'major', size = 5, width = 2, direction = 'in', right = 'on')
-    ax.yaxis.set_tick_params(which = 'minor', size = 2.5, width = 2, direction = 'in', right = 'on')
-    
-    plt.savefig("AR_plot.tiff", bbox_inches = 'tight', pad_inches = 0.2, dpi = 150, transparent = False)

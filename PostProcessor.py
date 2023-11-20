@@ -169,88 +169,6 @@ class PostProcessor:
         rms_surface = np.sqrt(rms_surface / area)
         return rms_surface
     
-    def add_dopant(self, mat_Vfrac):
-        if self.dope_method == 0:
-            # Fill with vacuum
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID]
-        elif self.dope_method == 1: #random everywhere
-            amorph_dopant  = mat_Vfrac[self.AMORPH_ID] * np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape)
-            crystal_dopant = mat_Vfrac[self.CRYSTAL_ID] * np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape)
-            # Normalize
-            norm_factor = self.dopant_vol_frac / ((amorph_dopant + crystal_dopant).mean())
-            amorph_dopant = amorph_dopant*norm_factor
-            crystal_dopant = crystal_dopant*norm_factor
-            mat_Vfrac[self.DOPANT_ID]  = crystal_dopant+amorph_dopant
-            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID] - crystal_dopant
-            mat_Vfrac[self.AMORPH_ID]  = mat_Vfrac[self.AMORPH_ID] - amorph_dopant
-            mat_Vfrac[self.VACUUM_ID]  = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-        elif self.dope_method == 2: # random matrix only
-            amorph_dopant = mat_Vfrac[self.AMORPH_ID]* np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape)
-            norm_factor = self.dopant_vol_frac / (amorph_dopant/self.amorph_matrix_Vfrac).mean()
-            amorph_dopant = amorph_dopant*norm_factor
-            mat_Vfrac[self.DOPANT_ID] = amorph_dopant
-            mat_Vfrac[self.AMORPH_ID] = mat_Vfrac[self.AMORPH_ID] - amorph_dopant
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-        elif self.dope_method == 3: # random fibrils only
-            crystal_dopant = mat_Vfrac[self.CRYSTAL_ID]* np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape)
-            norm_factor = self.dopant_vol_frac / crystal_dopant.mean()
-            crystal_dopant = crystal_dopant*norm_factor
-            mat_Vfrac[self.DOPANT_ID]  = crystal_dopant
-            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID] - crystal_dopant
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-        elif self.dope_method == 4: #Uniform dopant
-            # Making dopant:
-            mat_Vfrac[self.DOPANT_ID] = (mat_Vfrac[self.CRYSTAL_ID] + mat_Vfrac[self.AMORPH_ID])*self.dopant_vol_frac
-            # Subtracting dopant:
-            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID]*(1-self.dopant_vol_frac)
-            mat_Vfrac[self.AMORPH_ID] = mat_Vfrac[self.AMORPH_ID]*(1-self.dopant_vol_frac)
-            # Vacuum remaining:
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-        elif self.dope_method == 5: # preferential random doping
-            amorph_dopant = self.dope_method * mat_Vfrac[self.AMORPH_ID] * (self.dope_method*np.random.random_sample(mat_Vfrac[self.AMORPH_ID].shape))
-            crystal_dopant = self.crystal_dope_frac * mat_Vfrac[self.CRYSTAL_ID] * (self.crystal_dope_frac*np.random.random_sample(mat_Vfrac[self.CRYSTAL_ID].shape))
-            # Normalize
-            norm_factor = self.dopant_vol_frac / ((amorph_dopant + crystal_dopant).mean())
-            amorph_dopant = amorph_dopant*norm_factor
-            crystal_dopant = crystal_dopant*norm_factor
-            mat_Vfrac[self.DOPANT_ID] = crystal_dopant+amorph_dopant
-            mat_Vfrac[self.CRYSTAL_ID] = mat_Vfrac[self.CRYSTAL_ID] - crystal_dopant
-            mat_Vfrac[self.AMORPH_ID] = mat_Vfrac[self.AMORPH_ID] - amorph_dopant
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-        return mat_Vfrac
-
-    def add_uniform_dopant(self, mat_Vfrac):
-        crystalline_mol_fraction, amorphous_mol_fraction, _ = self.analyze_mol_fractions(mat_Vfrac)
-        total_mol_fraction = crystalline_mol_fraction + amorphous_mol_fraction
-        x = crystalline_mol_fraction / total_mol_fraction if total_mol_fraction > 0 else 0
-        
-        approx_dopant_vol_frac = self.dopant_vol_frac / (x * (1 - self.dopant_vol_frac))
-    
-        if self.dope_case == 0:  # Fill with vacuum
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID]
-    
-        if self.dope_case == 1:  # Uniform everywhere
-            total_material = mat_Vfrac[self.CRYSTAL_ID] + mat_Vfrac[self.AMORPH_ID]
-            dopant_vol_fraction = total_material * self.dopant_vol_frac
-            mat_Vfrac[self.DOPANT_ID] = dopant_vol_fraction
-            mat_Vfrac[self.CRYSTAL_ID] -= dopant_vol_fraction * mat_Vfrac[self.CRYSTAL_ID] / total_material
-            mat_Vfrac[self.AMORPH_ID] -= dopant_vol_fraction * mat_Vfrac[self.AMORPH_ID] / total_material
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-
-        elif self.dope_case == 2:  # Uniform in matrix only
-            dopant_vol_fraction = mat_Vfrac[self.AMORPH_ID] * approx_dopant_vol_frac
-            mat_Vfrac[self.DOPANT_ID] = dopant_vol_fraction
-            mat_Vfrac[self.AMORPH_ID] -= dopant_vol_fraction
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-                
-        elif self.dope_case == 3:  # Uniform in fibrils only
-            dopant_vol_fraction = mat_Vfrac[self.CRYSTAL_ID] * approx_dopant_vol_frac
-            mat_Vfrac[self.DOPANT_ID] = dopant_vol_fraction
-            mat_Vfrac[self.CRYSTAL_ID] -= dopant_vol_fraction
-            mat_Vfrac[self.VACUUM_ID] = 1 - mat_Vfrac[self.CRYSTAL_ID] - mat_Vfrac[self.AMORPH_ID] - mat_Vfrac[self.DOPANT_ID]
-
-        return mat_Vfrac
-    
     def euler_to_cartesian(self, theta, psi):
         z = np.sin(theta) * np.cos(psi)
         y = np.sin(theta) * np.sin(psi)
@@ -355,6 +273,8 @@ class PostProcessor:
         # Create boolean masks for overlapping regions
         overlapping_with_crystal = (mat_Vfrac[self.DOPANT_ID] > 0) & (mat_Vfrac[self.CRYSTAL_ID] > 0)
         overlapping_with_amorph = (mat_Vfrac[self.DOPANT_ID] > 0) & (mat_Vfrac[self.AMORPH_ID] > 0)
+        
+        mat_S[self.DOPANT_ID][dopant_mask] = 1
     
         if self.dopant_orientation == 'isotropic':
             dims = (rm.z_dim, rm.y_dim, rm.x_dim)
@@ -418,6 +338,7 @@ class PostProcessor:
         theta, psi = self.cartesian_to_euler(np.array([z, y, x]))
         
         amorph_mask = np.where(mat_Vfrac[self.AMORPH_ID] > 0)
+        mat_S[self.AMORPH_ID][amorph_mask] = 1
         mat_theta[self.AMORPH_ID][amorph_mask] = theta[amorph_mask]
         mat_psi[self.AMORPH_ID][amorph_mask] = psi[amorph_mask]
         
