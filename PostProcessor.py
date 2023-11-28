@@ -110,6 +110,9 @@ class PostProcessor:
             else:
                 raise ValueError(f"Invalid dopant method: {self.dopant_method}")
                 
+        # Call set_vacuum_Vfrac method to ensure the total material fraction is 1
+        mat_Vfrac = self.set_vacuum_Vfrac(mat_Vfrac)
+                
         # Add dopant orientation
         if self.dopant_orientation != None:
             print("Setting dopant orientation...")
@@ -335,6 +338,23 @@ class PostProcessor:
         mat_psi[self.AMORPH_ID][amorph_mask] = psi[amorph_mask]
         
         return mat_Vfrac, mat_S, mat_theta, mat_psi
+    
+    def set_vacuum_Vfrac(self, Vfrac):
+        num_mat, z_dim, y_dim, x_dim = Vfrac.shape
+    
+        # Calculate the total material fraction for each voxel
+        total_material = np.sum(Vfrac, axis=0)
+    
+        # Find voxels where the total material fraction is less than 1
+        insufficient_material = total_material < 1
+    
+        # Calculate the deficiency in material fraction
+        deficiency = 1 - total_material
+    
+        # Allocate the deficiency to the vacuum material
+        Vfrac[self.VACUUM_ID, insufficient_material] += deficiency[insufficient_material]
+        
+        return Vfrac
     
     def plot_field(self, field_ref, field_name):
         fig, ax = plt.subplots(1, 2, figsize=(10, 5))
