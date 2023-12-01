@@ -12,3 +12,5 @@ CyRSoXS.log
 config.txt
 Fibril.hdf5
 .gitignore
+old/
+Morphology.hdf5

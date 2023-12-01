@@ -1,0 +1,32 @@
+parameters_.txt
+
+Box Dimensions:
+x: 1024 nm (512 voxels)
+y: 1024 nm (512 voxels)
+z: 512 nm (256 voxels)
+Pitch: 2 nm
+
+Fibril Generator Parameters:
+	Size:	FibrilSizeParams(radius_nm_avg=15, radius_nm_std=3, min_fibril_length_nm=100, max_fibril_length_nm=400)
+	Growth:	FibrilGrowthParams(max_num_fibrils=1250, fibril_distribution=<FibrilDistribution.PDS: 1>, c2c_dist_nm=45, symmetrical_growth=False, periodic_bc=False)
+	Orientation:	FibrilOrientationParams(fibril_orientation=<FibrilOrientation.GRF_SAMPLE_FLAT: 2>, theta_distribution_csv=None, k=0.04, std=0.008, theta_sigma=30.0)
+
+Post Processor Parameters:
+	Materials:	MaterialParams(mw={1: 166.2842, 2: 166.2842, 3: 276.15}, density={1: 1.1, 2: 1.1, 3: 1.1}, num_materials=3)
+	CoreShell:	CoreShellParams(gaussian_std=3, fibril_shell_cutoff=0.2)
+	Matrix:	MatrixParams(amorph_matrix_Vfrac=0.9, amorph_orientation=True)
+	Surface Roughness:	None
+	Dopant:	None
+
+Calculated Mole Fractions:
+	Crystalline Mole Fraction: 0.23902472356447169
+	Amorphous Mole Fraction: 0.7609752764355283
+	Dopant Mole Fraction: 0.0
+
+Calculated Volume Fractions:
+	Crystalline Volume Fraction: 0.23902472356447166
+	Amorphous Volume Fraction: 0.7609752764355283
+	Dopant Volume Fraction: 0.0
+
+Percent Crystallinity:
+	Crystallinity (%): 22.381478548049927
