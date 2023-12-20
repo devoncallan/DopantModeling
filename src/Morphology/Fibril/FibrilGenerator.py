@@ -10,10 +10,10 @@ from scipy.optimize import curve_fit
 from FyeldGenerator import generate_field
 from tqdm import tqdm
 
-from Morphology.Fibril import Fibril
-from Morphology.FieldGeneration import generate_field_with_PSD, NormalizationType
-from Morphology.PoissonDiskSampling import generate_points
-from Morphology.MorphologyData import MorphologyData
+from src.Morphology.Fibril.Fibril import Fibril
+from src.Morphology.util.FieldGeneration import generate_field_with_PSD, NormalizationType
+from src.Morphology.util.PoissonDiskSampling import generate_points
+from src.Morphology.MorphologyData import MorphologyData
 
 
 ############################################

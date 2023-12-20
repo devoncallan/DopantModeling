@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from NRSS.checkH5 import checkH5
 import numpy as np
+import os
 
 from matplotlib import cm
 from matplotlib.colors import LogNorm
@@ -96,7 +97,7 @@ def format_I_yaxis(ax, I_range):
     ax.set_yticklabels(y_tick_strs)
     ax.set_ylim([I_min, I_max])
 
-def plot_anisotropy_EvQ(AR, q_range=Q_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT):
+def plot_anisotropy_EvQ(AR, q_range=Q_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT, save_dir=None):
 
     q_min, q_max = q_range
     E_min, E_max = E_range
@@ -127,9 +128,12 @@ def plot_anisotropy_EvQ(AR, q_range=Q_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT):
     format_E_yaxis(ax, E_range)
     
     plt.show()
-    # return fig
 
-def plot_intensity_EvQ(I, q_range=Q_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT, label=''):
+    if save_dir is not None:
+        save_fig(fig, save_dir, filename='anisotropy')
+    return fig, ax
+
+def plot_intensity_EvQ(I, q_range=Q_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT, label='', save_dir=None):
 
     q_min, q_max = q_range
     E_min, E_max = E_range
@@ -152,13 +156,15 @@ def plot_intensity_EvQ(I, q_range=Q_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT, labe
 
     plt.show()
 
+    if save_dir is not None:
+        save_fig(fig, save_dir, filename=label+'_EvQ')
 
-    return
+    return fig, ax
 
 def plot_ISI(ISI):
     return
 
-def plot_para_perp(para, perp, q_range=Q_RANGE_DEFAULT, I_range=I_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT): 
+def plot_para_perp(para, perp, q_range=Q_RANGE_DEFAULT, I_range=I_RANGE_DEFAULT, E_range=E_RANGE_DEFAULT, save_dir=None): 
 
     def update_plot(energy):
 
@@ -173,17 +179,17 @@ def plot_para_perp(para, perp, q_range=Q_RANGE_DEFAULT, I_range=I_RANGE_DEFAULT,
 
     fig, ax = setup_plot(figsize=(7,7))
     
-
     # energies = range(min(E_range), max(E_range))
     energies = para.sel(energy=slice(E_min,E_max)).energy
     print(energies)
     ani = FuncAnimation(fig, update_plot, frames=energies, repeat=False)
 
     plt.tight_layout()
-    ani.save('paraperp.mp4', writer='ffmpeg', fps=5, dpi=300)
+    fig_path = os.path.join(save_dir, 'paraperp.mp4')
+    ani.save(fig_path, writer='ffmpeg', fps=5, dpi=300)
     plt.show()
 
-    return
+    return fig, ax
 
 def setup_plot(figsize=(3.5,3.5)):
 
@@ -201,6 +207,14 @@ def setup_plot(figsize=(3.5,3.5)):
     ax.yaxis.set_tick_params(which = 'minor', size = 2.5, width = 2, direction = 'in', right = 'on')
     
     return fig, ax
+
+def plot_checkH5(filename:str, z_slice=0, save_dir=''):
+
+    print('Checking morphology HDF5 file.')
+    figs = checkH5(filename, z_slice=z_slice)
+    for i, fig in enumerate(figs):
+        fig_filename = f'Material{i+1}_z{z_slice}'
+        save_fig(fig, save_dir=save_dir, filename=fig_filename)
 
 def save_fig(fig, save_dir='', filename='test', dpi=300):
     save_path = os.path.join(save_dir, filename + '.png')

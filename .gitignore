@@ -14,3 +14,6 @@ Fibril.hdf5
 .gitignore
 old/
 Morphology.hdf5
+experiments/c2c_dist/
+experiments/__pycache__/
+experiments/ex/__pycache__/

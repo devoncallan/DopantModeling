@@ -1,8 +1,12 @@
 import shutil
 import os
 
-def make_output_dir(base_save_dir:str, dir_name:str):
+def make_output_dir(base_save_dir:str, dir_name:str, delete_dir_if_exists:bool=False):
     save_dir = os.path.join(base_save_dir, dir_name)
+
+    if delete_dir_if_exists:
+        delete_path(save_dir)
+        
     os.makedirs(save_dir, exist_ok=True)
     return save_dir
 

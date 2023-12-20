@@ -8,9 +8,9 @@ from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
 
-from Morphology.FibrilGenerator import FibrilGenerator, Materials
-from Morphology.MorphologyData import MorphologyData
-from Morphology.FieldGeneration import generate_field_with_PSD
+from src.Morphology.Fibril.FibrilGenerator import FibrilGenerator, Materials
+from src.Morphology.MorphologyData import MorphologyData
+from src.Morphology.util.FieldGeneration import generate_field_with_PSD
 
 # dopant_method:
     # all dopant methods:

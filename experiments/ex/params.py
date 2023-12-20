@@ -10,19 +10,6 @@ import numpy as np
 # Get the experiment series folder
 DEFAULT_MORPH_FILE = 'Morphology.hdf5'
 base_path = os.path.dirname(os.path.abspath(__file__))
-# main_dir = find_parent_of_subdir(base_path, "experiments")
-
-# src_dir = os.path.join(main_dir, 'src')
-# data_dir = os.path.join(main_dir, 'data')
-# exp_dir = os.path.join(main_dir, 'experiments')
-
-# sys.path.append(main_dir)
-# sys.path.append(src_dir)
-
-# sys.path.append('/home/devon/Documents/Github/NRSS/')
-# sys.path.append('/home/devon/Documents/Github/PyHyperScattering/src/')
-# sys.path.append('/home/devon/Documents/Github/Fibril/')
-# sys.path.append('/home/devon/Documents/Github/Fibril/src/')
 
 
 from src.Morphology.Fibril.FibrilGenerator import Materials
@@ -34,8 +21,6 @@ from src.Morphology.Fibril.FibrilGenerator import FibrilOrientation, FibrilDistr
 from src.Morphology.MorphologyData import MorphologyData
 
 from src.Common.files import make_output_dir, move, find_parent_of_subdir
-
-
 
 ####################################
 ### FIBRIL GENERATION PARAMETERS ###
@@ -112,7 +97,7 @@ energies1 = np.round(np.arange(280., 286., 0.5),1)
 energies2 = np.round(np.arange(286., 288., 0.2),1)
 energies3 = np.round(np.arange(288., 291.5, 0.5),1)
 energies = np.concatenate([energies1, energies2, energies3])
-energies = np.round(np.arange(280., 281., 1),1)
+# energies = np.round(np.arange(280., 282., 1),1)
 
 material_dict = {
     'Material1': 'vacuum', 
