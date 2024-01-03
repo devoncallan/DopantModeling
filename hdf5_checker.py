@@ -5,6 +5,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 from tqdm import tqdm
+import random
 sys.path.append('/home/php/NRSS/')
 from NRSS.checkH5 import checkH5
 
@@ -18,6 +19,9 @@ def find_unprocessed_hdf5_directories(root_dir):
         # Check if any HDF5 files in this directory have been processed
         if not any(glob.glob(os.path.splitext(file)[0] + "_mat*_checkH5.png") for file in hdf5_files):
             unprocessed_directories.append(subdir)
+
+    # Shuffle the list of unprocessed directories
+    random.shuffle(unprocessed_directories)
 
     return unprocessed_directories
 

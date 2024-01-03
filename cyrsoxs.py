@@ -7,9 +7,7 @@ import subprocess
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
-from matplotlib import ticker
-import PyHyperScattering
-from matplotlib import font_manager
+import random
 
 # Append Paths
 sys.path.append('/home/php/NRSS/')
@@ -90,7 +88,7 @@ def process_pickle_file(filename, post_processor):
     hdf5_filename = os.path.splitext(filename)[0] + '.hdf5'
     description_filename = os.path.splitext(filename)[0]
 
-    # Check if the corresponding .hdf5 file exists
+    # Check if the corresponding .hdf5 file exists or if force_hdf5 is True
     if not os.path.exists(hdf5_filename):
         print(f"Processing HDF5 file: {hdf5_filename}")
         with open(filename, 'rb') as f:
@@ -116,11 +114,27 @@ def process_pickle_file(filename, post_processor):
 
     write_materials(energies, material_dict, energy_dict, 4)
     write_config(list(energies), [0.0, 1.0, 360.0], CaseType=0, MorphologyType=0)
+    
     print(f"Running CyRSoXS with file: {hdf5_filename}")
-    subprocess.run(['CyRSoXS', hdf5_filename])
+    process = subprocess.run(['CyRSoXS', hdf5_filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    
+    if 'HDF5-DIAG' in process.stderr:
+        print(f"HDF5 error detected during subprocess execution for {filename}:")
+        print(process.stderr)
+        raise Exception("HDF5 Error")
 
     print(f"Finished processing pickle file: {filename}")
-
+    
+def find_parameters_file(root, base_filename):
+    file_name = "Parameters_" + base_filename + ".txt"
+    file_path = os.path.join(root, file_name)
+    if not os.path.isfile(file_path):
+        # Try parent directory
+        parent_dir = os.path.dirname(root)
+        file_path = os.path.join(parent_dir, file_name)
+        if not os.path.isfile(file_path):
+            return None
+    return file_path
 
 energy_dict = {'Energy': 6, 'DeltaPerp': 3, 'BetaPerp': 1, 'DeltaPara': 2, 'BetaPara': 0}
 
@@ -139,73 +153,168 @@ density = {
 }
 
 # File I/O
-pickle_save_name = '/home/php/CyRSoXS/PyHyperScattering_Batch_SST1_JupyterHub.pkl'
+pickle_save_name = '/home/php/CyRSoXS_sims/PyHyperScattering_Batch_SST1_JupyterHub.pkl'
 
 # Load Data
 with open(pickle_save_name, 'rb') as file:
     data = pickle.load(file)
 data_dict = {'scan_ids': data[0], 'sample_names': data[1], 'edges': data[2], 'ARs': data[3], 'paras': data[4], 'perps': data[5], 'circs': data[6], 'FY_NEXAFSs': data[7], 'Iq2s': data[8], 'ISIs': data[9]}
 
-# Gather a list of all .pickle files, excluding those in directories containing 'HDF5'
+# Gather a list of all .pickle files
 pickle_files = []
 for root, dirs, files in os.walk('.'):
     for filename in files:
-        if filename.endswith('.pickle') and 'HDF5' not in os.listdir(root):
+        if filename.endswith('.pickle'):
             full_path = os.path.abspath(os.path.join(root, filename))
             pickle_files.append(full_path)
 
+# Shuffle the list of .pickle files
+random.shuffle(pickle_files)
+
+# Initialize a dictionary to keep track of files that encountered errors
+error_files = {}
+
 # Process the gathered .pickle files
-for full_path in pickle_files:
+i = 0
+while i < len(pickle_files):
+    full_path = pickle_files[i]
     root, filename = os.path.split(full_path)
+    base_filename = os.path.splitext(filename)[0]
+
     print(f"\nProcessing file: {filename} in directory: {root}")
 
-    base_filename = os.path.splitext(filename)[0]
-    
-    params_file_path = os.path.join(root, "Parameters_" + base_filename + ".txt")
-    crystalline_mol_frac = read_crystalline_mol_frac_from_file(params_file_path)
-
-    # Path-dependent configurations
-    edge_to_find = 'C 1s' if 'C_K_Edge' in root else 'N 1s' if 'N_K_Edge' in root else 'F 1s' if 'F_K_Edge' in root else 'C 1s'
-    indices = [index for index, edge in enumerate(data_dict['edges']) if edge == edge_to_find]
-    energies = [data_dict['ARs'][index].energy for index in indices]
-    energies = energies[0].values[1:]
-    dopant_vol_frac = interpolate_dopant_vol_frac_TFSI(crystalline_mol_frac) if 'TFSI' in root else interpolate_dopant_vol_frac_F4TCNQ(crystalline_mol_frac) if 'F4TCNQ' in root else 0.0
-    mol_weight = update_mol_weight_for_dopant(root, default_mol_weight.copy())
-    
-    material_dict = generate_material_dict(root)
-    print(f"Generated material_dict: {material_dict}")
-    
-    dopant_orientation = 'perpendicular' if 'Perp' in root else 'parallel' if 'Para' in root else 'isotropic'
-    print(f"Set dopant orientation to: {dopant_orientation}")
-    
-    crystal_dope_frac = 1 if 'Fibril' in root else 0 if 'Matrix' in root else 0.5
-    print(f"Set crystal dope fraction to: {crystal_dope_frac}")
-        
-    # Initialize the PostProcessor with the new dopant_vol_frac
-    post_processor = PostProcessor(
-        num_materials=4, mol_weight=mol_weight, density=density,
-        dope_case=1, dopant_method='preferential', dopant_orientation=dopant_orientation, 
-        dopant_vol_frac=dopant_vol_frac, crystal_dope_frac=crystal_dope_frac,
-        core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
-        surface_roughness=False, height_feature=3, max_valley_nm=46, 
-        amorph_matrix_Vfrac=0.9, amorphous_orientation=True)
-
-    if os.path.basename(root) == base_filename:
-        print(f"{filename} is already in a directory with a matching name")
-        os.chdir(root)
-        print(f"Changed working directory to: {root}")
-        process_pickle_file(filename, post_processor)
+    # Skip if HDF5 file or directory exists
+    hdf5_filename = os.path.splitext(filename)[0] + '.hdf5'
+    if os.path.exists(hdf5_filename) or 'HDF5' in os.listdir(root):
+        print(f"Skipped processing {filename} as 'HDF5' directory or .hdf5 file exists in {root}")
+        i += 1
         continue
 
-    new_directory = os.path.join(root, base_filename)
-    os.makedirs(new_directory, exist_ok=True)
-    print(f"Created directory: {new_directory}")
-    new_path = os.path.abspath(os.path.join(new_directory, filename))
-    shutil.move(full_path, new_path)
-    print(f"Moved {filename} to {new_path}")
+    try:
+        params_file_path = find_parameters_file(root, base_filename)
+        if params_file_path is None:
+            raise FileNotFoundError(f"Parameters file not found for {filename}")
 
-    os.chdir(new_directory)
-    print(f"Changed working directory to: {new_directory}")
-    process_pickle_file(filename, post_processor)
+        crystalline_mol_frac = read_crystalline_mol_frac_from_file(params_file_path)
+    
+        # Path-dependent configurations
+        edge_to_find = 'C 1s' if 'C_K_Edge' in root else 'N 1s' if 'N_K_Edge' in root else 'F 1s' if 'F_K_Edge' in root else 'C 1s'
+        indices = [index for index, edge in enumerate(data_dict['edges']) if edge == edge_to_find]
+        energies = [data_dict['ARs'][index].energy for index in indices]
+        energies = energies[0].values[1:]
+        dopant_vol_frac = 0.0 if 'Undoped' in root else interpolate_dopant_vol_frac_TFSI(crystalline_mol_frac) if 'TFSI' in root else interpolate_dopant_vol_frac_F4TCNQ(crystalline_mol_frac) if 'F4TCNQ' in root else 0.0
+        mol_weight = update_mol_weight_for_dopant(root, default_mol_weight.copy())
+        
+        material_dict = generate_material_dict(root)
+        print(f"Generated material_dict: {material_dict}")
+        
+        dopant_orientation = 'perpendicular' if 'Perp' in root else 'parallel' if 'Para' in root else 'isotropic'
+        print(f"Set dopant orientation to: {dopant_orientation}")
+        
+        crystal_dope_frac = 1 if 'Fibril' in root else 0 if 'Matrix' in root else 0.5
+        print(f"Set crystal dope fraction to: {crystal_dope_frac}")
+            
+        # Initialize the PostProcessor with the new dopant_vol_frac
+        post_processor = PostProcessor(
+            num_materials=4, mol_weight=mol_weight, density=density,
+            dope_case=1, dopant_method='preferential', dopant_orientation=dopant_orientation, 
+            dopant_vol_frac=dopant_vol_frac, crystal_dope_frac=crystal_dope_frac,
+            core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
+            surface_roughness=False, height_feature=3, max_valley_nm=46, 
+            amorph_matrix_Vfrac=0.9, amorphous_orientation=True)
+    
+        if os.path.basename(root) == base_filename:
+            print(f"{filename} is already in a directory with a matching name")
+            os.chdir(root)
+            print(f"Changed working directory to: {root}")
+            process_pickle_file(filename, post_processor)
+            continue
+    
+        new_directory = os.path.join(root, base_filename)
+        os.makedirs(new_directory, exist_ok=True)
+        print(f"Created directory: {new_directory}")
+        new_path = os.path.abspath(os.path.join(new_directory, filename))
+        shutil.move(full_path, new_path)
+        print(f"Moved {filename} to {new_path}")
+    
+        os.chdir(new_directory)
+        print(f"Changed working directory to: {new_directory}")
+        process_pickle_file(filename, post_processor)
+    
+        print(f"Finished processing pickle file: {filename}")
 
-    print(f"Finished processing pickle file: {filename}")
+    except Exception as e:  
+        print(f"HDF5 FileIException encountered for file {filename}: {e}")
+        if filename not in error_files:
+            error_files[filename] = 1
+            print(f"First error encounter for {filename}, retrying at the end of the list.")
+            pickle_files.append(full_path)
+        elif error_files[filename] == 1:
+            error_files[filename] += 1
+            print(f"Second error encounter for {filename}, regenerating HDF5 file.")
+            
+            # Delete existing HDF5 file if it exists
+            hdf5_filename = os.path.splitext(filename)[0] + '.hdf5'
+            if os.path.exists(hdf5_filename):
+                print(f"Deleting existing HDF5 file: {hdf5_filename}")
+                os.remove(hdf5_filename)
+    
+            base_filename = os.path.splitext(filename)[0]
+            
+            params_file_path = os.path.join(root, "Parameters_" + base_filename + ".txt")
+            crystalline_mol_frac = read_crystalline_mol_frac_from_file(params_file_path)
+        
+            # Path-dependent configurations
+            edge_to_find = 'C 1s' if 'C_K_Edge' in root else 'N 1s' if 'N_K_Edge' in root else 'F 1s' if 'F_K_Edge' in root else 'C 1s'
+            indices = [index for index, edge in enumerate(data_dict['edges']) if edge == edge_to_find]
+            energies = [data_dict['ARs'][index].energy for index in indices]
+            energies = energies[0].values[1:]
+            dopant_vol_frac = 0.0 if 'Undoped' in root else interpolate_dopant_vol_frac_TFSI(crystalline_mol_frac) if 'TFSI' in root else interpolate_dopant_vol_frac_F4TCNQ(crystalline_mol_frac) if 'F4TCNQ' in root else 0.0
+            mol_weight = update_mol_weight_for_dopant(root, default_mol_weight.copy())
+            
+            material_dict = generate_material_dict(root)
+            print(f"Generated material_dict: {material_dict}")
+            
+            dopant_orientation = 'perpendicular' if 'Perp' in root else 'parallel' if 'Para' in root else 'isotropic'
+            print(f"Set dopant orientation to: {dopant_orientation}")
+            
+            crystal_dope_frac = 1 if 'Fibril' in root else 0 if 'Matrix' in root else 0.5
+            print(f"Set crystal dope fraction to: {crystal_dope_frac}")
+                
+            # Initialize the PostProcessor with the new dopant_vol_frac
+            post_processor = PostProcessor(
+                num_materials=4, mol_weight=mol_weight, density=density,
+                dope_case=1, dopant_method='preferential', dopant_orientation=dopant_orientation, 
+                dopant_vol_frac=dopant_vol_frac, crystal_dope_frac=crystal_dope_frac,
+                core_shell_morphology=True, gaussian_std=3, fibril_shell_cutoff=0.2, 
+                surface_roughness=False, height_feature=3, max_valley_nm=46, 
+                amorph_matrix_Vfrac=0.9, amorphous_orientation=True)
+        
+            if os.path.basename(root) == base_filename:
+                print(f"{filename} is already in a directory with a matching name")
+                os.chdir(root)
+                print(f"Changed working directory to: {root}")
+                process_pickle_file(filename, post_processor)
+                continue
+        
+            new_directory = os.path.join(root, base_filename)
+            os.makedirs(new_directory, exist_ok=True)
+            print(f"Created directory: {new_directory}")
+            new_path = os.path.abspath(os.path.join(new_directory, filename))
+            shutil.move(full_path, new_path)
+            print(f"Moved {filename} to {new_path}")
+        
+            os.chdir(new_directory)
+            print(f"Changed working directory to: {new_directory}")
+            process_pickle_file(filename, post_processor)
+        
+            print(f"Finished processing pickle file: {filename}")
+        else:
+            print(f"Multiple errors encountered for {filename}, skipping further processing.")
+            error_files[filename] += 1
+
+    finally:
+        # Close any open Matplotlib figures
+        plt.close('all')
+
+    i += 1  # Move to the next file in the list

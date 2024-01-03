@@ -1,5 +1,11 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
+import tempfile
+import shutil
+from pathlib import Path
+import io
 import matplotlib.animation as animation
 import trimesh
 import copy
@@ -270,108 +276,359 @@ class Morphology:
                 fibril.make_intersection_mesh()
 
         return fibril
-    
-    def fill_model(self, timeout=10, plot_histogram=False):
-        """ Fill morphology with fibrils
+            
+    def fill_model(self, timeout=10, plot_histogram=False, visualization_interval=10, gif_filename=None):
+        """ Fill morphology with fibrils and optionally create a gif.
         """
-
-        if self.rand_orientation >= 2:
-            print('Generating psi field...')
-            self.generate_psi_field()
+        if gif_filename is not None:
+            # Create a temporary directory to store frames
+            with tempfile.TemporaryDirectory() as frames_dir:
+                print(f"Temporary directory created at {frames_dir}")
+    
+                if self.rand_orientation >= 2:
+                    print('Generating psi field...')
+                    self.generate_psi_field()
+                
+                if (self.theta_distribution_csv is not None) and (self.rand_orientation >= 3):
+                    # Load data from CSV
+                    df = pd.read_csv(self.theta_distribution_csv)
+                    
+                    # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
+                    df = df.dropna()
+                    df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
+                    
+                    # Get theta values and percentages
+                    chi_values = df['theta'].values
+                    percentages = df['percentage'].values
+                    
+                    # Fit the Gaussian function to the histogram data
+                    params_new, _ = curve_fit(self.gaussian, chi_values / 180 * np.pi, percentages, p0=[np.pi/5, max(percentages)])
+                    
+                    # Extract fitted parameters
+                    theta_sigma_fit, theta_scale_fit = params_new
+                    
+                    # Generate fitted curve
+                    fit_x = np.linspace(0, np.pi, 101)
+                    fit_y = self.gaussian(fit_x, theta_sigma_fit, theta_scale_fit)
+                    
+                     # Create figure and axis objects
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    
+                    # Plot the original and fitted data on the axes
+                    ax.plot(chi_values / 180 * np.pi, percentages, '-', color='black', linewidth=2, label='Original Data')
+                    ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
+                    
+                    # Add labels and title
+                    ax.set_xlabel('Theta (rad)')
+                    ax.set_ylabel('Frequency')
+                    ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
+                    
+                    # Show legend
+                    ax.legend()
+                    
+                    plt.show()
+                    
+                    self.theta_sigma_fit = theta_sigma_fit
+                    print('Generating theta field from fit sigma...')
+                    self.generate_theta_field(normalization_type='psd', new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
+                    
+                    # Return figure and axis
+                    # return fig, ax
+                elif self.rand_orientation >= 3:
+                    print('Generating theta field...')
+                    self.generate_theta_field(normalization_type='psd')
+                else:
+                    print('random theta sampling...')
         
-        if (self.theta_distribution_csv is not None) and (self.rand_orientation >= 3):
-            # Load data from CSV
-            df = pd.read_csv(self.theta_distribution_csv)
+                def create_fibril():
+                    # Initialize a new fibril 
+                    fibril = self.new_fibril()
+        
+                    # Check if fibril is valid. If not, keep generating new fibril until it is valid.
+                    # Fibril is invalid if it intersects with the bounding box or any existing fibrils
+                    while not self.is_initial_mesh_valid(fibril.intersection_mesh):
+                        fibril = self.new_fibril()
+        
+                    return fibril
+                
+                # Wrap the range object with tqdm for a loading bar
+                for i in tqdm(range(self.max_num_fibrils), desc='Filling model'):
+                    fibril_creation_thread = threading.Thread(target=create_fibril)
+                    fibril_creation_thread.start()
+                    fibril_creation_thread.join(timeout)
+        
+                    if fibril_creation_thread.is_alive():
+                        fibril_creation_thread.join() # Ensure the thread finishes
+                        print(f"Timed out while creating fibril {i}. Ending process.")
+                        break
+        
+                    fibril = create_fibril()
+                    # Save a copy of the fibril in its initial state
+                    init_fibril = copy.deepcopy(fibril)
+        
+                    # Grow fibrils in each direction until the fibril intersects with any other fibrils or
+                    # the bounding box or until the fibril reaches its maximum length
+                    fibril = self.grow_fibril(fibril, +1) # Grow fibril to the left
+                    fibril = self.grow_fibril(fibril, -1) # Grow fibril to the right
+        
+                    fibril.make_fibril_mesh()
+        
+                    #print(f'-- Fibril {i} --')
+        
+                    self.fibrils.append(fibril)
+    
+                    # Update visualization and save frame conditionally
+                    if i % visualization_interval == 0:
+                        clear_output(wait=True)
+                        scene = self.get_scene(show_bounding_box=True)
+                        display(scene.show())
+                        
+                        # Calculate volume fraction
+                        volume_fraction = self.calculate_volume_fraction()
+        
+                        # Save frame with fibril count and volume fraction
+                        frame_filename = os.path.join(frames_dir, f'frame_{i:04d}.png')
+                        self.get_frame(frame_filename, fibril_count=i + 1, volume_fraction=volume_fraction)
             
-            # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
-            df = df.dropna()
-            df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
-            
-            # Get theta values and percentages
-            chi_values = df['theta'].values
-            percentages = df['percentage'].values
-            
-            # Fit the Gaussian function to the histogram data
-            params_new, _ = curve_fit(self.gaussian, chi_values / 180 * np.pi, percentages, p0=[np.pi/5, max(percentages)])
-            
-            # Extract fitted parameters
-            theta_sigma_fit, theta_scale_fit = params_new
-            
-            # Generate fitted curve
-            fit_x = np.linspace(0, np.pi, 101)
-            fit_y = self.gaussian(fit_x, theta_sigma_fit, theta_scale_fit)
-            
-             # Create figure and axis objects
-            fig, ax = plt.subplots(figsize=(10, 5))
-            
-            # Plot the original and fitted data on the axes
-            ax.plot(chi_values / 180 * np.pi, percentages, '-', color='black', linewidth=2, label='Original Data')
-            ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
-            
-            # Add labels and title
-            ax.set_xlabel('Theta (rad)')
-            ax.set_ylabel('Frequency')
-            ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
-            
-            # Show legend
-            ax.legend()
-            
-            plt.show()
-            
-            self.theta_sigma_fit = theta_sigma_fit
-            print('Generating theta field from fit sigma...')
-            self.generate_theta_field(normalization_type='psd', new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
-            
-            # Return figure and axis
-            # return fig, ax
-        elif self.rand_orientation >= 3:
-            print('Generating theta field...')
-            self.generate_theta_field(normalization_type='psd')
+                    if plot_histogram:
+                        self.plot_fibril_histogram()
+        
+                # Create GIF after the model is filled
+                self.make_gif(frames_dir, '.', gif_filename)
+
         else:
-            print('random theta sampling...')
-
-        def create_fibril():
-            # Initialize a new fibril 
-            fibril = self.new_fibril()
-
-            # Check if fibril is valid. If not, keep generating new fibril until it is valid.
-            # Fibril is invalid if it intersects with the bounding box or any existing fibrils
-            while not self.is_initial_mesh_valid(fibril.intersection_mesh):
+            if self.rand_orientation >= 2:
+                print('Generating psi field...')
+                self.generate_psi_field()
+            
+            if (self.theta_distribution_csv is not None) and (self.rand_orientation >= 3):
+                # Load data from CSV
+                df = pd.read_csv(self.theta_distribution_csv)
+                
+                # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
+                df = df.dropna()
+                df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
+                
+                # Get theta values and percentages
+                chi_values = df['theta'].values
+                percentages = df['percentage'].values
+                
+                # Fit the Gaussian function to the histogram data
+                params_new, _ = curve_fit(self.gaussian, chi_values / 180 * np.pi, percentages, p0=[np.pi/5, max(percentages)])
+                
+                # Extract fitted parameters
+                theta_sigma_fit, theta_scale_fit = params_new
+                
+                # Generate fitted curve
+                fit_x = np.linspace(0, np.pi, 101)
+                fit_y = self.gaussian(fit_x, theta_sigma_fit, theta_scale_fit)
+                
+                 # Create figure and axis objects
+                fig, ax = plt.subplots(figsize=(10, 5))
+                
+                # Plot the original and fitted data on the axes
+                ax.plot(chi_values / 180 * np.pi, percentages, '-', color='black', linewidth=2, label='Original Data')
+                ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
+                
+                # Add labels and title
+                ax.set_xlabel('Theta (rad)')
+                ax.set_ylabel('Frequency')
+                ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
+                
+                # Show legend
+                ax.legend()
+                
+                plt.show()
+                
+                self.theta_sigma_fit = theta_sigma_fit
+                print('Generating theta field from fit sigma...')
+                self.generate_theta_field(normalization_type='psd', new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
+                
+                # Return figure and axis
+                # return fig, ax
+            elif self.rand_orientation >= 3:
+                print('Generating theta field...')
+                self.generate_theta_field(normalization_type='psd')
+            else:
+                print('random theta sampling...')
+    
+            def create_fibril():
+                # Initialize a new fibril 
                 fibril = self.new_fibril()
+    
+                # Check if fibril is valid. If not, keep generating new fibril until it is valid.
+                # Fibril is invalid if it intersects with the bounding box or any existing fibrils
+                while not self.is_initial_mesh_valid(fibril.intersection_mesh):
+                    fibril = self.new_fibril()
+    
+                return fibril
+    
+            # Wrap the range object with tqdm for a loading bar
+            for i in tqdm(range(self.max_num_fibrils), desc='Filling model'):
+                fibril_creation_thread = threading.Thread(target=create_fibril)
+                fibril_creation_thread.start()
+                fibril_creation_thread.join(timeout)
+    
+                if fibril_creation_thread.is_alive():
+                    fibril_creation_thread.join() # Ensure the thread finishes
+                    print(f"Timed out while creating fibril {i}. Ending process.")
+                    break
+    
+                fibril = create_fibril()
+                # Save a copy of the fibril in its initial state
+                init_fibril = copy.deepcopy(fibril)
+    
+                # Grow fibrils in each direction until the fibril intersects with any other fibrils or
+                # the bounding box or until the fibril reaches its maximum length
+                fibril = self.grow_fibril(fibril, +1) # Grow fibril to the left
+                fibril = self.grow_fibril(fibril, -1) # Grow fibril to the right
+    
+                fibril.make_fibril_mesh()
+    
+                #print(f'-- Fibril {i} --')
+    
+                self.fibrils.append(fibril)
+                
+                # Update visualization every 'visualization_interval' fibrils
+                if i % visualization_interval == 0:
+                    clear_output(wait=True)
+                    scene = self.get_scene(show_bounding_box=True)
+                    display(scene.show())
+        
+                if plot_histogram:
+                    self.plot_fibril_histogram()
 
-            return fibril
+    def get_frame(self, filename, fibril_count, volume_fraction):
+        """
+        Render the current morphology scene as an image, add text with a white background box below the image, and save it to a file.
+        """
+        scene = self.get_scene(show_voxelized=False, show_bounding_box=True, custom_color=True)
+        data = scene.save_image(resolution=(720, 720))
+        image = Image.open(io.BytesIO(data))
+    
+        # Define a larger font size
+        font_size = 50
+    
+        # Try to use a specific font (e.g., Arial), otherwise fall back to default font
+        try:
+            font_path = r"C:\Users\Phong\Box\Research\Mixed Conduction Project\RSOXS Projects\Fonts\Avenir Regular.ttf"
+            font = ImageFont.truetype(font_path, font_size)
+        except IOError:
+            print("Default font loaded as specified font was not found.")
+            font = ImageFont.load_default()
+    
+        # Draw text on the image
+        draw = ImageDraw.Draw(image)
+        text_fibrils = f"Number of Fibrils: {fibril_count}"
+        volume_percent = volume_fraction * 100
+        text_volume_percent = f"Fibril Volume Percent: {volume_percent:.2f}%"
+    
+        # Position for the text (centered below the image)
+        textwidth_fibrils, textheight_fibrils = draw.textsize(text_fibrils, font)
+        textwidth_volfrac, textheight_volfrac = draw.textsize(text_volume_percent, font)
+        x_center = image.width / 2
+        y_position = image.height + 10  # Adding a small margin below the image
+    
+        # Create a new image with extra space for text
+        new_image_height = image.height + textheight_fibrils + textheight_volfrac + 30
+        new_image = Image.new("RGB", (image.width, new_image_height), "white")
+        new_image.paste(image, (0, 0))
+    
+        draw = ImageDraw.Draw(new_image)
+    
+        # Draw the text centered
+        draw.text((x_center - textwidth_fibrils / 2, y_position), text_fibrils, font=font, fill=(0, 0, 0))
+        draw.text((x_center - textwidth_volfrac / 2, y_position + textheight_fibrils + 10), text_volume_percent, font=font, fill=(0, 0, 0))
+    
+        new_image.save(str(filename))
 
-        # Wrap the range object with tqdm for a loading bar
-        for i in tqdm(range(self.max_num_fibrils), desc='Filling model'):
-            fibril_creation_thread = threading.Thread(target=create_fibril)
-            fibril_creation_thread.start()
-            fibril_creation_thread.join(timeout)
 
-            if fibril_creation_thread.is_alive():
-                fibril_creation_thread.join() # Ensure the thread finishes
-                print(f"Timed out while creating fibril {i}. Ending process.")
-                break
+    def calculate_volume_fraction(self):
+        # Calculate the total volume occupied by the fibrils
+        total_fibril_volume = sum(fibril.volume for fibril in self.fibrils if fibril.volume is not None)
 
-            fibril = create_fibril()
-            # Save a copy of the fibril in its initial state
-            init_fibril = copy.deepcopy(fibril)
+        # Calculate the volume of the simulation space (ensure units are consistent)
+        simulation_space_volume = self.x_dim_nm * self.y_dim_nm * self.z_dim_nm
 
-            # Grow fibrils in each direction until the fibril intersects with any other fibrils or
-            # the bounding box or until the fibril reaches its maximum length
-            fibril = self.grow_fibril(fibril, +1) # Grow fibril to the left
-            fibril = self.grow_fibril(fibril, -1) # Grow fibril to the right
+        # Calculate the volume fraction
+        volume_fraction = total_fibril_volume / simulation_space_volume if simulation_space_volume > 0 else 0
 
-            fibril.make_fibril_mesh()
+        return volume_fraction
+    
+    def make_gif(self, input_dir, output_dir, gif_name):
+        """
+        Create a gif from a series of images in a directory and make the final frame appear longer.
+    
+        Args:
+            input_dir (str): Directory containing the input images.
+            output_dir (str): Directory to save the output gif.
+            gif_name (str): Name of the gif file to create.
+        """
+        output_path = Path(output_dir) / gif_name
+        images = sorted(Path(input_dir).glob("frame_*.png"))
+    
+        if not images:
+            print("No images found for creating GIF.")
+            return
+    
+        # Create frames from images
+        frames = [Image.open(image) for image in images]
+    
+        # Extend the duration of the final frame by adding it multiple times
+        final_frame_extension = 10  # Number of times to repeat the final frame
+        frames.extend([frames[-1]] * final_frame_extension)
+    
+        # Save as GIF
+        frames[0].save(output_path, format='GIF', append_images=frames[1:], save_all=True, duration=250, loop=1)
+    
+        print(f"GIF saved to {output_path}")
+        """
+        Create a gif from a series of images in a directory.
 
-            #print(f'-- Fibril {i} --')
+        Args:
+            input_dir (str): Directory containing the input images.
+            output_dir (str): Directory to save the output gif.
+            gif_name (str): Name of the gif file to create.
+        """
+        # Ensure output directory exists
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-            self.fibrils.append(fibril)
-            
-            clear_output(wait=True)
-            
-            if plot_histogram:
-                self.plot_fibril_histogram()
+        # List all image files in the input directory
+        images = [img for img in sorted(os.listdir(input_dir)) if img.endswith(".png")]
+        frames = [Image.open(os.path.join(input_dir, img)) for img in images]
 
+        # Make gif
+        gif_path = os.path.join(output_dir, gif_name)
+        frames[0].save(gif_path, format='GIF',
+                        append_images=frames[1:],
+                        save_all=True,
+                        duration=500, loop=0)
+
+        print(f"GIF saved to {gif_path}")
+    
+    def get_scene(self, show_voxelized=False, show_bounding_box=False, custom_color=True):
+        scene_mesh_list = []
+        for fibril in self.fibrils:
+            mesh = fibril.voxel_mesh if show_voxelized else fibril.fibril_mesh
+    
+            # Set custom color if requested
+            if custom_color:
+                mesh.visual.face_colors = [139, 86, 176, 255]
+        
+            scene_mesh_list.append(mesh)
+        
+        if show_bounding_box:
+            scene_mesh_list.append(self.bounding_path)
+    
+        # Create the scene
+        scene = trimesh.Scene(scene_mesh_list)
+    
+        # Set transparent background color
+        scene.bgcolor = [255, 255, 255, 0]  # RGBA where A (alpha) is 0 for transparency
+    
+        return scene
+    
     def voxelize_model(self):
         for fibril in tqdm(self.fibrils, desc="Voxelizing Fibrils"):
             fibril.make_voxelized_fibril_mesh()
@@ -379,21 +636,7 @@ class Morphology:
     def set_fibril_orientations(self):
         for i in range(len(self.fibrils)):
             self.fibrils[i].set_random_orientation()
-
-    def get_scene(self, show_voxelized=False, show_bounding_box=False):
-
-        scene_mesh_list = []
-        for fibril in self.fibrils:
-            if show_voxelized:
-                scene_mesh_list.append(fibril.voxel_mesh)
-            else:
-                scene_mesh_list.append(fibril.fibril_mesh)
-
-        if show_bounding_box:
-            scene_mesh_list.append(self.bounding_path)
-        return trimesh.Scene(scene_mesh_list)
-
-
+    
     def plot_fibril_histogram(self):
         # Extracting lengths, radii, orientations theta, and orientations psi from fibrils
         lengths = [fibril.length * self.pitch_nm for fibril in self.fibrils]
