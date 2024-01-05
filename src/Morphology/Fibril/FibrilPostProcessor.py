@@ -73,6 +73,7 @@ class MatrixParams:
 class DopantParams:
     dopant_vol_frac: float = 0.
     crystal_dopant_frac: float = 0.
+    uniform_doping: bool = False
     dopant_orientation: DopantOrientation = DopantOrientation.NONE
     
 @dataclass
@@ -165,47 +166,43 @@ class FibrilPostProcessor:
         data.mat_Vfrac[Materials.AMORPH_ID][amorph_matrix_mask] += self.matrix_params.amorph_matrix_Vfrac
         data.mat_Vfrac[Materials.AMORPH_ID] = np.clip(data.mat_Vfrac[Materials.AMORPH_ID], 0, 1)
         data.mat_Vfrac[Materials.VACUUM_ID] = 1 - data.mat_Vfrac[Materials.CRYSTAL_ID] - data.mat_Vfrac[Materials.AMORPH_ID] - data.mat_Vfrac[Materials.DOPANT_ID]
+        
         return data
 
     def _add_uniform_dopant(self, data:MorphologyData) -> MorphologyData:
-        
-        x_D  = self.dopant_params.dopant_vol_frac     # Final dopant volume fraction
-        f_DC = self.dopant_params.crystal_dopant_frac # Fraction of dopant in crystalline region vs. amorphous
-        
+        x_D = self.dopant_params.dopant_vol_frac        # Final dopant volume fraction
+        f_DC = self.dopant_params.crystal_dopant_frac   # Fraction of dopant in crystalline region
+        uniform_doping = self.dopant_params.uniform_doping  # Check for uniform doping
+    
         if x_D == 0:
             return data
-        elif x_D == 1:
+        elif x_D >= 1:
             raise Exception('Target dopant volume fraction must be < 1.')
-        
-        crystal_mask = np.where(data.mat_Vfrac[Materials.CRYSTAL_ID] != 0)
-        amorph_mask  = np.where(data.mat_Vfrac[Materials.AMORPH_ID]  != 0)
-        
-        # Volume of added dopant (in crystalline and amorphous regions)
-        vol_dopant = ((x_D) / (1-x_D)) * (data.mat_Vfrac[Materials.CRYSTAL_ID] + data.mat_Vfrac[Materials.AMORPH_ID])
-        vol_dopant_crystal = f_DC*vol_dopant[crystal_mask]
-        vol_dopant_amorph = (1-f_DC)*vol_dopant[amorph_mask]
-        
-        # Update the volume fractions to reflect added dopant
-        data.mat_Vfrac[Materials.DOPANT_ID][crystal_mask] = vol_dopant_crystal / (vol_dopant_crystal+1)
-        data.mat_Vfrac[Materials.CRYSTAL_ID][crystal_mask] *= 1/(vol_dopant_crystal+1)
-        
-        data.mat_Vfrac[Materials.DOPANT_ID][amorph_mask] = vol_dopant_amorph / (vol_dopant_amorph+1)
-        data.mat_Vfrac[Materials.AMORPH_ID][amorph_mask] *= 1/(vol_dopant_amorph+1)
-        
-        data.mat_Vfrac[Materials.VACUUM_ID] = 1 - data.mat_Vfrac[Materials.CRYSTAL_ID] - data.mat_Vfrac[Materials.DOPANT_ID] - data.mat_Vfrac[Materials.AMORPH_ID]
-        return data
+            
+        print('Adding dopant...')
     
-            # # Volume of added dopant in crystalline regions
-        # # V_DA1 = (1-f_DC)*vol_dopant # Volume of added dopant in amorphous regions
-        
-        
-        
-        # data.mat_Vfrac[Materials.DOPANT_ID][crystal_mask] = V_DC1[crystal_mask]/(V_DC1[crystal_mask]+1)
-        # data.mat_Vfrac[Materials.CRYSTAL_ID][crystal_mask] *= 1/(V_DC1[crystal_mask]+1)
-        
-        # data.mat_Vfrac[Materials.DOPANT_ID][amorph_mask] = V_DA1[amorph_mask]/(V_DA1[amorph_mask]+1)
-        # data.mat_Vfrac[Materials.AMORPH_ID][amorph_mask] *= 1/(V_DA1[amorph_mask]+1)
-        
+        # Calculate overall volume fractions
+        crystal_vol_frac, amorph_vol_frac, _ = analyze_vol_fractions(data.mat_Vfrac)
+    
+        # Override f_DC for uniform doping
+        if uniform_doping:
+            f_DC = crystal_vol_frac
+    
+        # Calculate replacement ratios
+        R_crystal = (crystal_vol_frac - x_D * f_DC) / crystal_vol_frac if crystal_vol_frac != 0 else 0
+        R_amorph = (amorph_vol_frac - x_D * (1 - f_DC)) / amorph_vol_frac if amorph_vol_frac != 0 else 0
+    
+        # Replace the specified fraction of each material with dopant in each voxel
+        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.CRYSTAL_ID] * (1 - R_crystal)
+        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.AMORPH_ID] * (1 - R_amorph)
+        data.mat_Vfrac[Materials.CRYSTAL_ID] *= R_crystal
+        data.mat_Vfrac[Materials.AMORPH_ID] *= R_amorph
+    
+        # Ensure the sum of all volume fractions equals 1
+        data.mat_Vfrac[Materials.VACUUM_ID] = 1 - np.sum(data.mat_Vfrac, axis=0)
+    
+        return data
+
     def _set_amorphous_orientation(self, data:MorphologyData) -> MorphologyData:
 
         if self.matrix_params is not None and self.matrix_params.amorph_orientation == False:
@@ -225,7 +222,6 @@ class FibrilPostProcessor:
         return data
     
     def _set_dopant_orientation(self, data:MorphologyData) -> MorphologyData:
-
 
         if self.dopant_params.dopant_orientation == DopantOrientation.NONE:
             return data
@@ -297,7 +293,6 @@ class FibrilPostProcessor:
             f.write('\nPercent Crystallinity:\n')
             f.write(f'\tCrystallinity (%): {per_crystal}')
 
-
 ### Post Process Morphology ###
 
 def process_morphology(fibgen: FibrilGenerator, p) -> MorphologyData:
@@ -354,6 +349,7 @@ def analyze_percent_crystallinity(mat_Vfrac):
 
     total_vol = crystal_vol + amorph_vol
     percent_crystallinity = crystal_vol / total_vol * 100
+    
     return percent_crystallinity
     
 def analyze_vol_fractions(mat_Vfrac):
