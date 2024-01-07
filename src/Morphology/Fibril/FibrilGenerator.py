@@ -487,7 +487,8 @@ def generate_morphology(p) -> FibrilGenerator:
     )
 
     fibril_orientation_params = FibrilOrientationParams(
-        fibril_orientation=FibrilOrientation.GRF_SAMPLE_FLAT,
+        fibril_orientation=p.fibril_orientation,
+        theta_distribution_csv=p.theta_distribution_csv,
         k=p.k,
         std=p.std
         # k=1./(fibgen.x_dim*np.pi*f), 

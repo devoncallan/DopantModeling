@@ -33,7 +33,6 @@ def create_hdf5(data:MorphologyData, p):
 def create_inputs(p):
     write_materials(p.energies, p.material_dict, p.energy_dict, p.num_materials)
     write_config(list(p.energies), [0.0, 1.0, 360.0], CaseType=0, MorphologyType=0)
-    
 
 def run(p, save_dir:str=''):
     subprocess.run(['CyRSoXS', p.DEFAULT_MORPH_FILE])
@@ -47,7 +46,6 @@ def run(p, save_dir:str=''):
     move(src=HDF5_DIR, dest_dir=save_dir)
     for i in range(p.num_materials):
         move(src=f'Material{i+1}.txt', dest_dir=save_dir)
-    
 
 def load(base_path, pitch_nm=2):
 

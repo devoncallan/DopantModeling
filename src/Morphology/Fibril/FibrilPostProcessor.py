@@ -11,24 +11,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from src.Morphology.Fibril.FibrilGenerator import FibrilGenerator, Materials
 from src.Morphology.MorphologyData import MorphologyData
 from src.Morphology.util.FieldGeneration import generate_field_with_PSD
-
-# dopant_method:
-    # all dopant methods:
-        # 0: no dopant 
-    # random dopant:
-        # 1: uniform random replacing p3ht 
-        # 2: Dopant only in amorph matrix
-        # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
-        # 4: Uniformly doped to the dopant frac, all subtracted from P3HT
-        # 5: Dope preferentially towards fibrils or matrix
-            # crystal_dope_frac: fraction of total dopant in crystals
-    # uniform dopant
-        # 1: uniform random replacing p3ht 
-        # 2: Dopant only in amorph matrix
-        # 3: Dopant only in fibrils (mainly for f4tcnq, tfsi likely won't do this)
-    # preferential_dopant
-        # != 0: add dopant
-            # crystal_dope_frac: fraction of total dopant in crystals
      
 ################################################
 ### Named parameters for FibrilPostProcessor ###
@@ -40,20 +22,6 @@ class DopantLocation(Enum):
     CRYSTAL_ONLY = 2
     PREFERENTIAL = 3
     
-# class DopantDistribution(Enum):
-#     NO_DOPANT    = 0
-#     RANDOM       = 1
-#     UNIFORM      = 2
-    
-# class DopantDistribution(Enum):
-#     NO_DOPANT    = 0
-#     UNIFORM      = 1
-#     PREFERENTIAL = 2
-    
-# Overall dopant volume fraction
-# Fraction of dopant in crystalline region vs. amorphous
-
-
 class DopantOrientation(Enum):
     NONE = 0
     ISOTROPIC = 1
@@ -66,24 +34,23 @@ class DopantOrientation(Enum):
 
 @dataclass
 class MatrixParams:
-    amorph_matrix_Vfrac: float = 0.90
     amorph_orientation: bool = True
     
 @dataclass
 class DopantParams:
-    dopant_vol_frac: float = 0.
-    crystal_dopant_frac: float = 0.
+    dopant_vol_frac: float = 0.0
+    crystal_dopant_frac: float = 0.0
     uniform_doping: bool = False
     dopant_orientation: DopantOrientation = DopantOrientation.NONE
     
 @dataclass
 class SurfaceRoughnessParams:
-    height_feature: float = 0.
-    max_valley_nm: float = 0.
+    height_feature: float = 0.0
+    max_valley_nm: float = 0.0
     
 @dataclass
 class CoreShellParams:
-    gaussian_std: float = 3.
+    gaussian_std: float = 3.0
     fibril_shell_cutoff: float = 0.2
     
 @dataclass
@@ -118,10 +85,13 @@ class FibrilPostProcessor:
 
         data = self._set_amorphous_matrix(data) # Also handles surface roughness
         data = self._set_amorphous_orientation(data)
-
+        
         if self.dopant_params is not None:
             data = self._add_uniform_dopant(data)
             data = self._set_dopant_orientation(data)
+            
+        # Ensure the sum of all volume fractions equals 1
+        data.mat_Vfrac[Materials.VACUUM_ID] = 1.0 - np.sum(data.mat_Vfrac, axis=0)
 
         return data
             
@@ -129,17 +99,16 @@ class FibrilPostProcessor:
         
         # Isolate crystalline region
         fibril_core_Vfrac = data.mat_Vfrac[Materials.CRYSTAL_ID]
-        fibril_core_mask  = np.where(fibril_core_Vfrac == 1)
+        fibril_core_mask  = np.where(fibril_core_Vfrac == 1.0)
 
         # Create and isolate shell region
         fibril_shell_Vfrac = gaussian_filter(fibril_core_Vfrac, self.core_shell_params.gaussian_std)
-        fibril_shell_Vfrac[fibril_core_mask] = 0
+        fibril_shell_Vfrac[fibril_core_mask] = 0.0
         fibril_shell_mask = np.where(fibril_shell_Vfrac >= self.core_shell_params.fibril_shell_cutoff)
 
         # Set the fibril shells to 100% amorphous
-        fibril_shell_Vfrac = np.zeros_like(fibril_shell_Vfrac)
-        fibril_shell_Vfrac[fibril_shell_mask] = 1.0
-        data.mat_Vfrac[Materials.AMORPH_ID] = fibril_shell_Vfrac
+        data.mat_Vfrac[Materials.AMORPH_ID][fibril_shell_mask] = 1.0
+        
         return data
     
     def _set_amorphous_matrix(self, data: MorphologyData) -> MorphologyData:
@@ -158,14 +127,12 @@ class FibrilPostProcessor:
             z_range = np.arange(data.z_dim)
             z_mask = z_range[:,None,None] < max_z_dim
             current_Vfrac = data.mat_Vfrac[Materials.AMORPH_ID] + data.mat_Vfrac[Materials.CRYSTAL_ID]
-            amorph_matrix_mask = z_mask & (current_Vfrac < 1)
+            amorph_matrix_mask = z_mask & (current_Vfrac < 1.0)
         else:
-            amorph_matrix_mask = np.where(data.mat_Vfrac[Materials.CRYSTAL_ID] != 1)
+            amorph_matrix_mask = np.where(data.mat_Vfrac[Materials.CRYSTAL_ID] != 1.0)
         
         print('Setting amorphous matrix...')
-        data.mat_Vfrac[Materials.AMORPH_ID][amorph_matrix_mask] += self.matrix_params.amorph_matrix_Vfrac
-        data.mat_Vfrac[Materials.AMORPH_ID] = np.clip(data.mat_Vfrac[Materials.AMORPH_ID], 0, 1)
-        data.mat_Vfrac[Materials.VACUUM_ID] = 1 - data.mat_Vfrac[Materials.CRYSTAL_ID] - data.mat_Vfrac[Materials.AMORPH_ID] - data.mat_Vfrac[Materials.DOPANT_ID]
+        data.mat_Vfrac[Materials.AMORPH_ID][amorph_matrix_mask] = 1.0 - data.mat_Vfrac[Materials.CRYSTAL_ID][amorph_matrix_mask]
         
         return data
 
@@ -174,12 +141,10 @@ class FibrilPostProcessor:
         f_DC = self.dopant_params.crystal_dopant_frac   # Fraction of dopant in crystalline region
         uniform_doping = self.dopant_params.uniform_doping  # Check for uniform doping
     
-        if x_D == 0:
+        if x_D == 0.0:
             return data
-        elif x_D >= 1:
+        elif x_D >= 1.0:
             raise Exception('Target dopant volume fraction must be < 1.')
-            
-        print('Adding dopant...')
     
         # Calculate overall volume fractions
         crystal_vol_frac, amorph_vol_frac, _ = analyze_vol_fractions(data.mat_Vfrac)
@@ -189,17 +154,16 @@ class FibrilPostProcessor:
             f_DC = crystal_vol_frac
     
         # Calculate replacement ratios
-        R_crystal = (crystal_vol_frac - x_D * f_DC) / crystal_vol_frac if crystal_vol_frac != 0 else 0
-        R_amorph = (amorph_vol_frac - x_D * (1 - f_DC)) / amorph_vol_frac if amorph_vol_frac != 0 else 0
+        R_crystal = (crystal_vol_frac - x_D * f_DC) / crystal_vol_frac if crystal_vol_frac != 0.0 else 0.0
+        R_amorph = (amorph_vol_frac - x_D * (1.0 - f_DC)) / amorph_vol_frac if amorph_vol_frac != 0.0 else 0.0
     
+        print('Adding dopant...')
+
         # Replace the specified fraction of each material with dopant in each voxel
-        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.CRYSTAL_ID] * (1 - R_crystal)
-        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.AMORPH_ID] * (1 - R_amorph)
+        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.CRYSTAL_ID] * (1.0 - R_crystal) 
+        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.AMORPH_ID] * (1.0 - R_amorph)
         data.mat_Vfrac[Materials.CRYSTAL_ID] *= R_crystal
         data.mat_Vfrac[Materials.AMORPH_ID] *= R_amorph
-    
-        # Ensure the sum of all volume fractions equals 1
-        data.mat_Vfrac[Materials.VACUUM_ID] = 1 - np.sum(data.mat_Vfrac, axis=0)
     
         return data
 
@@ -209,13 +173,13 @@ class FibrilPostProcessor:
             return data
 
         amorph = data.mat_Vfrac[Materials.AMORPH_ID]
-        amorph_mask = amorph != 0
+        amorph_mask = amorph != 0.0
         
         # Generate randomly sampled theta and psi (samples unit sphere)
-        theta = np.arccos(1 - 2 * np.random.uniform(0, 1, amorph.shape))
+        theta = np.arccos(1.0 - 2.0 * np.random.uniform(0.0, 1.0, amorph.shape))
         psi = np.random.uniform(-np.pi, np.pi, amorph.shape)
 
-        data.mat_S[Materials.AMORPH_ID][amorph_mask] = 1
+        data.mat_S[Materials.AMORPH_ID][amorph_mask] = 1.0
         data.mat_theta[Materials.AMORPH_ID][amorph_mask] = theta[amorph_mask]
         data.mat_psi[Materials.AMORPH_ID][amorph_mask] = psi[amorph_mask]
 
@@ -228,20 +192,20 @@ class FibrilPostProcessor:
 
         # Set to zero, parallel in crystalline, perpendicular in crystalline, and/or in amorphous, random
         crystal = data.mat_Vfrac[Materials.CRYSTAL_ID]
-        crystal_mask = crystal != 0
+        crystal_mask = crystal > 0.0
         
         amorph = data.mat_Vfrac[Materials.AMORPH_ID]
-        amorph_mask = amorph != 0
+        amorph_mask = amorph > 0.0
         
-        dopant_in_crystal = np.sum(data.mat_Vfrac[Materials.DOPANT_ID][crystal_mask]) > 0.
-        dopant_in_amorph  = np.sum(data.mat_Vfrac[Materials.DOPANT_ID][amorph_mask]) > 0.
+        dopant_in_crystal = np.sum(data.mat_Vfrac[Materials.DOPANT_ID][crystal_mask]) > 0.0
+        dopant_in_amorph  = np.sum(data.mat_Vfrac[Materials.DOPANT_ID][amorph_mask]) > 0.0
         
         if dopant_in_crystal:
-            data.mat_S[Materials.DOPANT_ID][crystal_mask] = 1
+            data.mat_S[Materials.DOPANT_ID][crystal_mask] = 1.0
             data.mat_theta[Materials.DOPANT_ID][crystal_mask] = data.mat_theta[Materials.CRYSTAL_ID][crystal_mask]
             data.mat_psi[Materials.DOPANT_ID][crystal_mask] = data.mat_psi[Materials.CRYSTAL_ID][crystal_mask]
         if dopant_in_amorph:
-            data.mat_S[Materials.DOPANT_ID][amorph_mask] = 1
+            data.mat_S[Materials.DOPANT_ID][amorph_mask] = 1.0
             data.mat_theta[Materials.DOPANT_ID][amorph_mask] = data.mat_theta[Materials.AMORPH_ID][amorph_mask]
             data.mat_psi[Materials.DOPANT_ID][amorph_mask] = data.mat_psi[Materials.AMORPH_ID][amorph_mask]
         
@@ -276,7 +240,6 @@ class FibrilPostProcessor:
             f.write(f'\tSurface Roughness:\t{self.surface_roughness_params}\n')
             f.write(f'\tDopant:\t{self.dopant_params}\n')
 
-
             crystal_mol_frac, amorph_mol_frac, dopant_mol_frac = analyze_mol_fractions(data.mat_Vfrac, self.material_params.density, self.material_params.mw)
             crystal_vol_frac, amorph_vol_frac, dopant_vol_frac = analyze_vol_fractions(data.mat_Vfrac)
             f.write('\nCalculated Mole Fractions:\n')
@@ -295,7 +258,7 @@ class FibrilPostProcessor:
 
 ### Post Process Morphology ###
 
-def process_morphology(fibgen: FibrilGenerator, p) -> MorphologyData:
+def process_morphology(fibgen: FibrilGenerator, p, existing_data: MorphologyData = None) -> MorphologyData:
     material_params = MaterialParams(
         num_materials=p.num_materials, 
         mw=p.mw, 
@@ -304,38 +267,45 @@ def process_morphology(fibgen: FibrilGenerator, p) -> MorphologyData:
 
     core_shell_params = CoreShellParams(
         gaussian_std=p.gaussian_std, 
-        fibril_shell_cutoff=p.fibril_shell_cutoff)
+        fibril_shell_cutoff=p.fibril_shell_cutoff
+    )
 
     matrix_params = MatrixParams(
-        amorph_matrix_Vfrac=p.amorph_matrix_Vfrac, 
-        amorph_orientation=p.amorph_orientation)
+        amorph_orientation=p.amorph_orientation
+    )
 
     surface_roughness_params = None
     if p.use_surface_roughness_params:
         surface_roughness_params = SurfaceRoughnessParams(
             height_feature=p.height_feature,
-            max_valley_nm=p.max_valley_nm)
+            max_valley_nm=p.max_valley_nm
+        )
     
     dopant_params = None
     if p.use_dopant_params:
         dopant_params = DopantParams(
             dopant_vol_frac=p.dopant_vol_frac, 
             crystal_dopant_frac=p.crystal_dopant_frac,
-            dopant_orientation=DopantOrientation.ISOTROPIC)
+            dopant_orientation=DopantOrientation.ISOTROPIC
+        )
 
     post_processor = FibrilPostProcessor(
         material_params=material_params,
         matrix_params=matrix_params,
         surface_roughness_params=surface_roughness_params,
         core_shell_params=core_shell_params,
-        dopant_params=dopant_params)
+        dopant_params=dopant_params
+    )
     
-    data = fibgen.create_morphology_data()
-    data = post_processor.process(data)
-    post_processor.save_parameters(data, fibgen)
+    # Use existing data if provided, otherwise create new morphology data
+    if existing_data is not None:
+        data = existing_data
+        data = post_processor.process(data)
+    else:
+        data = fibgen.create_morphology_data()
+        data = post_processor.process(data)
 
-    return data
-
+    return data, post_processor
 
 #######################################################
 ### Functions for calculating volume/mole fractions ###
@@ -344,11 +314,11 @@ def process_morphology(fibgen: FibrilGenerator, p) -> MorphologyData:
 def analyze_percent_crystallinity(mat_Vfrac):
 
     # Sum the volume of each component
-    crystal_vol = np.sum(mat_Vfrac[Materials.CRYSTAL_ID] != 0)
-    amorph_vol  = np.sum(mat_Vfrac[Materials.AMORPH_ID] != 0)
+    crystal_vol = np.sum(mat_Vfrac[Materials.CRYSTAL_ID] != 0.0)
+    amorph_vol  = np.sum(mat_Vfrac[Materials.AMORPH_ID] != 0.0)
 
     total_vol = crystal_vol + amorph_vol
-    percent_crystallinity = crystal_vol / total_vol * 100
+    percent_crystallinity = crystal_vol / total_vol * 100.0
     
     return percent_crystallinity
     
@@ -361,7 +331,7 @@ def analyze_vol_fractions(mat_Vfrac):
     vacuum_vol  = np.sum(mat_Vfrac[Materials.VACUUM_ID])
 
     # Calculate the total occupied volume
-    total_vol = crystal_vol + amorph_vol + dopant_vol + 0*vacuum_vol
+    total_vol = crystal_vol + amorph_vol + dopant_vol + 0.0*vacuum_vol
 
     # Calculate volume fractions
     crystal_vol_frac = crystal_vol / total_vol
