@@ -1,4 +1,5 @@
 import subprocess
+import glob
 from src.Common.files import move, make_output_dir, delete_path
 
 from PyHyperScattering.load import cyrsoxsLoader
@@ -11,9 +12,8 @@ from NRSS.checkH5 import checkH5
 
 CONFIG_FILE = 'config.txt'
 LOG_FILE = 'CyRSoXS.log'
-PARAM_FILE = 'parameters.txt'
+PARAM_FILE = '*parameter*.txt'
 HDF5_DIR = 'HDF5/'
-
 
 def cleanup(p, delete_morph_file=False):
 
@@ -42,7 +42,9 @@ def run(p, save_dir:str=''):
     
     move(src=CONFIG_FILE, dest_dir=save_dir)
     move(src=LOG_FILE, dest_dir=save_dir)
-    move(src=PARAM_FILE, dest_dir=save_dir)
+    param_files = glob.glob(PARAM_FILE)
+    for param_file in param_files:
+        move(src=param_file, dest_dir=save_dir)
     move(src=HDF5_DIR, dest_dir=save_dir)
     for i in range(p.num_materials):
         move(src=f'Material{i+1}.txt', dest_dir=save_dir)
