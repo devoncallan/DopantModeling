@@ -37,18 +37,6 @@ def create_inputs(p):
 def run(p, save_dir:str=''):
     subprocess.run(['CyRSoXS', p.DEFAULT_MORPH_FILE])
 
-    if save_dir == '':
-        return
-    
-    move(src=CONFIG_FILE, dest_dir=save_dir)
-    move(src=LOG_FILE, dest_dir=save_dir)
-    param_files = glob.glob(PARAM_FILE)
-    for param_file in param_files:
-        move(src=param_file, dest_dir=save_dir)
-    move(src=HDF5_DIR, dest_dir=save_dir)
-    for i in range(p.num_materials):
-        move(src=f'Material{i+1}.txt', dest_dir=save_dir)
-
 def load(base_path, pitch_nm=2):
 
     load = cyrsoxsLoader()

@@ -5,6 +5,7 @@ from scipy.ndimage import gaussian_filter
 import numpy as np
 import matplotlib.pyplot as plt
 import opensimplex as simplex
+import re
 from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -79,20 +80,27 @@ class FibrilPostProcessor:
         self.core_shell_params = core_shell_params
         self.surface_roughness_params = surface_roughness_params
         
-    def process(self, data:MorphologyData) -> MorphologyData:
-
-        if self.core_shell_params is not None:
-            data = self._add_fibril_shell(data)
-
-        data = self._set_amorphous_matrix(data) # Also handles surface roughness
+    def process(self, data:MorphologyData, just_add_dopants: bool = False) -> MorphologyData:
         
-        if self.dopant_params is not None:
-            data = self._add_uniform_dopant(data)
-            data = self._set_dopant_orientation(data)
+        if just_add_dopants:
+            if self.dopant_params is not None:
+                data = self._add_uniform_dopant(data)
+                data = self._set_dopant_orientation(data)
+        else:
+            if self.core_shell_params is not None:
+                data = self._add_fibril_shell(data)
+    
+            data = self._set_amorphous_matrix(data) # Also handles surface roughness
             
-        data = self._adjust_amorphous_density(data)
-        data = self._set_amorphous_orientation(data)
-        
+            if self.dopant_params is not None:
+                data = self._add_uniform_dopant(data)
+                data = self._set_dopant_orientation(data)
+                
+            data = self._adjust_amorphous_density(data)
+            data = self._set_amorphous_orientation(data)
+            
+            data.mat_Vfrac[Materials.VACUUM_ID] = 1.0 - np.sum(data.mat_Vfrac, axis=0)
+            
         return data
             
     def _add_fibril_shell(self, data:MorphologyData) -> MorphologyData:
@@ -199,9 +207,6 @@ class FibrilPostProcessor:
         # Adjust the amorphous matrix volume fraction
         data.mat_Vfrac[Materials.AMORPH_ID] *= self.matrix_params.amorph_matrix_Vfrac
     
-        # Update the vacuum volume fraction to account for the reduced amorphous density
-        data.mat_Vfrac[Materials.VACUUM_ID] = 1.0 - np.sum(data.mat_Vfrac, axis=0)
-    
         return data
 
     def _set_amorphous_orientation(self, data:MorphologyData) -> MorphologyData:
@@ -248,15 +253,14 @@ class FibrilPostProcessor:
         
         return data
     
-    def save_parameters(self, data:MorphologyData, fibgen:FibrilGenerator, filename:str=''):
-
+    def save_parameters(self, data:MorphologyData, fibgen:FibrilGenerator, p, filename:str=''):
         if filename == '':
             filename = 'parameters.txt'
         else:
             filename = '_'.join(['parameters', filename]) + '.txt'
         
         with open(filename, 'w') as f:
-            f.write(filename+'\n')
+            f.write(f'File: {filename}\n')
 
             # Box dimensions
             f.write('\nBox Dimensions:\n')
@@ -265,11 +269,13 @@ class FibrilPostProcessor:
             f.write(f'z: {fibgen.z_dim_nm} nm ({fibgen.z_dim} voxels)\n')
             f.write(f'Pitch: {fibgen.pitch_nm} nm\n')
 
+            # Fibril Generator Parameters
             f.write('\nFibril Generator Parameters:\n')
             f.write(f'\tSize:\t{fibgen.fibril_size_params}\n')
             f.write(f'\tGrowth:\t{fibgen.fibril_growth_params}\n')
             f.write(f'\tOrientation:\t{fibgen.fibril_orientation_params}\n')
 
+            # Post Processor Parameters
             f.write('\nPost Processor Parameters:\n')
             f.write(f'\tMaterials:\t{self.material_params}\n')
             f.write(f'\tCoreShell:\t{self.core_shell_params}\n')
@@ -277,6 +283,7 @@ class FibrilPostProcessor:
             f.write(f'\tSurface Roughness:\t{self.surface_roughness_params}\n')
             f.write(f'\tDopant:\t{self.dopant_params}\n')
 
+            # Calculated Mole and Volume Fractions
             crystal_mol_frac, amorph_mol_frac, dopant_mol_frac = analyze_mol_fractions(data.mat_Vfrac, self.material_params.density, self.material_params.mw)
             crystal_vol_frac, amorph_vol_frac, dopant_vol_frac = analyze_vol_fractions(data.mat_Vfrac)
             f.write('\nCalculated Mole Fractions:\n')
@@ -289,13 +296,22 @@ class FibrilPostProcessor:
             f.write(f'\tAmorphous Volume Fraction: {amorph_vol_frac}\n')
             f.write(f'\tDopant Volume Fraction: {dopant_vol_frac}\n')
 
+            # Percent Crystallinity
             per_crystal = analyze_percent_crystallinity(data.mat_Vfrac)
             f.write('\nPercent Crystallinity:\n')
-            f.write(f'\tCrystallinity (%): {per_crystal}')
+            f.write(f'\tCrystallinity (%): {per_crystal}\n')
+
+            # Energies and Materials
+            f.write('\nSimulation Energies:\n')
+            f.write(f'\tEnergies: {p.energies}\n')
+
+            f.write('\nMaterials Dictionary:\n')
+            for material, path in p.material_dict.items():
+                f.write(f'\t{material}: {path}\n')
 
 ### Post Process Morphology ###
 
-def process_morphology(fibgen: FibrilGenerator, p, existing_data: MorphologyData = None) -> MorphologyData:
+def process_morphology(fibgen: FibrilGenerator, p, existing_data: MorphologyData = None, just_add_dopants: bool = False) -> MorphologyData:
     material_params = MaterialParams(
         num_materials=p.num_materials, 
         mw=p.mw, 
@@ -323,7 +339,7 @@ def process_morphology(fibgen: FibrilGenerator, p, existing_data: MorphologyData
         dopant_params = DopantParams(
             dopant_vol_frac=p.dopant_vol_frac, 
             crystal_dopant_frac=p.crystal_dopant_frac,
-            dopant_orientation=DopantOrientation.ISOTROPIC
+            dopant_orientation=p.dopant_orientation
         )
 
     post_processor = FibrilPostProcessor(
@@ -334,10 +350,8 @@ def process_morphology(fibgen: FibrilGenerator, p, existing_data: MorphologyData
         dopant_params=dopant_params
     )
     
-    # Use existing data if provided, otherwise create new morphology data
-    if existing_data is not None:
-        data = existing_data
-        data = post_processor.process(data)
+    if existing_data is not None and just_add_dopants:
+        data = post_processor.process(existing_data, just_add_dopants=True)
     else:
         data = fibgen.create_morphology_data()
         data = post_processor.process(data)
@@ -398,3 +412,10 @@ def analyze_mol_fractions(mat_Vfrac, density, MW):
     dopant_mol_frac  = dopant_mol  / total_mol
 
     return crystal_mol_frac, amorph_mol_frac, dopant_mol_frac
+
+def read_crystalline_mol_frac_from_file(file_path):
+    with open(file_path, 'r') as f:
+        for line in f:
+            if 'Crystalline Mole Fraction:' in line:
+                return float(re.findall("\d+\.\d+", line)[0])
+    return None
