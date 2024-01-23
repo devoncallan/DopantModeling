@@ -70,9 +70,9 @@ class FibrilPostProcessor:
     def __init__(self,
         material_params:MaterialParams,
         matrix_params:MatrixParams,
-        dopant_params:DopantParams=None,
-        core_shell_params:CoreShellParams=None,
-        surface_roughness_params:SurfaceRoughnessParams=None):
+        dopant_params:DopantParams,
+        core_shell_params:CoreShellParams,
+        surface_roughness_params:SurfaceRoughnessParams):
         
         self.material_params = material_params
         self.matrix_params = matrix_params
@@ -155,11 +155,11 @@ class FibrilPostProcessor:
             raise Exception('Target dopant volume fraction must be < 1.')
         
         # Calculate overall volume fractions
-        x_C, x_A, _ = analyze_vol_fractions(data.mat_Vfrac)
-    
+        x_C, x_A, x_D, x_V = analyze_vol_fractions(data.mat_Vfrac)
+            
         # Override f_DC for uniform doping
         if uniform_doping:
-            f_DC = x_C / (x_C + x_A)
+            f_DC = x_C / (x_C + x_A + x_V)
     
         # Function to find the root
         def find_x_DT(x_DT):
@@ -171,13 +171,14 @@ class FibrilPostProcessor:
             R_amorph = (x_A - x_DT * (1.0 - f_DC)) / x_A if x_A != 0.0 else 0.0
     
             # Simulated doping
-            sim_Vfrac[Materials.DOPANT_ID] = sim_Vfrac[Materials.CRYSTAL_ID] * (1.0 - R_crystal) + sim_Vfrac[Materials.AMORPH_ID] * (1.0 - R_amorph)
+            sim_Vfrac[Materials.DOPANT_ID] += sim_Vfrac[Materials.CRYSTAL_ID] * (1.0 - R_crystal)
+            sim_Vfrac[Materials.DOPANT_ID] += (data.mat_Vfrac[Materials.AMORPH_ID]) * (1.0 - R_amorph)
             sim_Vfrac[Materials.CRYSTAL_ID] *= R_crystal
             sim_Vfrac[Materials.AMORPH_ID] *= R_amorph
     
             # Recalculate volume fractions after simulated doping
-            sim_x_C, sim_x_A, sim_x_D = analyze_vol_fractions(sim_Vfrac)
-            sim_x_D = sim_x_D / (sim_x_C + sim_x_A * self.matrix_params.amorph_matrix_Vfrac + sim_x_D)
+            sim_x_C, sim_x_A, sim_x_D, sim_x_V = analyze_vol_fractions(sim_Vfrac)
+            sim_x_D = sim_x_D / (sim_x_C + sim_x_A + sim_x_D + sim_x_V)
     
             return sim_x_D - x_D_target
     
@@ -195,7 +196,7 @@ class FibrilPostProcessor:
     
         # Replace the specified fraction of each material with dopant in each voxel
         data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.CRYSTAL_ID] * (1.0 - R_crystal) 
-        data.mat_Vfrac[Materials.DOPANT_ID] += data.mat_Vfrac[Materials.AMORPH_ID] * (1.0 - R_amorph)
+        data.mat_Vfrac[Materials.DOPANT_ID] += (data.mat_Vfrac[Materials.AMORPH_ID]) * (1.0 - R_amorph)
         data.mat_Vfrac[Materials.CRYSTAL_ID] *= R_crystal
         data.mat_Vfrac[Materials.AMORPH_ID] *= R_amorph
     
@@ -285,7 +286,7 @@ class FibrilPostProcessor:
 
             # Calculated Mole and Volume Fractions
             crystal_mol_frac, amorph_mol_frac, dopant_mol_frac = analyze_mol_fractions(data.mat_Vfrac, self.material_params.density, self.material_params.mw)
-            crystal_vol_frac, amorph_vol_frac, dopant_vol_frac = analyze_vol_fractions(data.mat_Vfrac)
+            crystal_vol_frac, amorph_vol_frac, dopant_vol_frac, vacuum_vol_frac = analyze_vol_fractions(data.mat_Vfrac)
             f.write('\nCalculated Mole Fractions:\n')
             f.write(f'\tCrystalline Mole Fraction: {crystal_mol_frac}\n')
             f.write(f'\tAmorphous Mole Fraction: {amorph_mol_frac}\n')
@@ -296,14 +297,14 @@ class FibrilPostProcessor:
             f.write(f'\tAmorphous Volume Fraction: {amorph_vol_frac}\n')
             f.write(f'\tDopant Volume Fraction: {dopant_vol_frac}\n')
 
-            # Percent Crystallinity
-            per_crystal = analyze_percent_crystallinity(data.mat_Vfrac)
-            f.write('\nPercent Crystallinity:\n')
-            f.write(f'\tCrystallinity (%): {per_crystal}\n')
+            # # Percent Crystallinity
+            # per_crystal = analyze_percent_crystallinity(data.mat_Vfrac)
+            # f.write('\nPercent Crystallinity:\n')
+            # f.write(f'\tCrystallinity (%): {per_crystal}\n')
 
             # Energies and Materials
             f.write('\nSimulation Energies:\n')
-            f.write(f'\tEnergies: {p.energies}\n')
+            f.write(f'\t{p.edge_to_find}: {p.energies}\n')
 
             f.write('\nMaterials Dictionary:\n')
             for material, path in p.material_dict.items():
@@ -324,23 +325,27 @@ def process_morphology(fibgen: FibrilGenerator, p, existing_data: MorphologyData
     )
 
     matrix_params = MatrixParams(
+        amorph_matrix_Vfrac=p.amorph_matrix_Vfrac,
         amorph_orientation=p.amorph_orientation
     )
 
-    surface_roughness_params = None
-    if p.use_surface_roughness_params:
-        surface_roughness_params = SurfaceRoughnessParams(
-            height_feature=p.height_feature,
-            max_valley_nm=p.max_valley_nm
+    surface_roughness_params = SurfaceRoughnessParams(
+        height_feature=p.height_feature,
+        max_valley_nm=p.max_valley_nm
         )
     
-    dopant_params = None
-    if p.use_dopant_params:
-        dopant_params = DopantParams(
-            dopant_vol_frac=p.dopant_vol_frac, 
-            crystal_dopant_frac=p.crystal_dopant_frac,
-            dopant_orientation=p.dopant_orientation
+    if p.height_feature == 0 and p.max_valley_nm == 0:
+        surface_roughness_params = None
+
+    dopant_params = DopantParams(
+        dopant_vol_frac=p.dopant_vol_frac, 
+        crystal_dopant_frac=p.crystal_dopant_frac,
+        uniform_doping=p.uniform_doping,
+        dopant_orientation=p.dopant_orientation
         )
+    
+    if p.dopant == None:
+        dopant_params = None
 
     post_processor = FibrilPostProcessor(
         material_params=material_params,
@@ -388,8 +393,9 @@ def analyze_vol_fractions(mat_Vfrac):
     crystal_vol_frac = crystal_vol / total_vol
     amorph_vol_frac  = amorph_vol  / total_vol
     dopant_vol_frac  = dopant_vol  / total_vol
+    vacuum_vol_frac = vacuum_vol / total_vol
 
-    return crystal_vol_frac, amorph_vol_frac, dopant_vol_frac
+    return crystal_vol_frac, amorph_vol_frac, dopant_vol_frac, vacuum_vol_frac
 
 def analyze_mol_fractions(mat_Vfrac, density, MW):
 

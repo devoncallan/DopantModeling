@@ -65,7 +65,7 @@ class FibrilOrientationParams:
     theta_distribution_csv: str = None
     k: float = 1
     std: float = 1.
-    theta_sigma: float = 30.
+    # theta_sigma: float = 30.
 
 #########################################################
 ### FibrilGenerator: Create initial fibril morphology ###
@@ -137,7 +137,7 @@ class FibrilGenerator:
             k=self.fibril_orientation_params.k,
             std=self.fibril_orientation_params.std,
             dims=self.dims,
-            max_value=2*np.pi,
+            max_value=np.pi,
             normalization_type=normalization_type,
             new_mean=new_mean,
             new_std=new_std
@@ -253,11 +253,11 @@ class FibrilGenerator:
                 
                 plt.show()
                 
-                self.theta_sigma_fit = theta_sigma_fit
+                # self.theta_sigma = theta_sigma_fit
                 print('Generating theta field from fit sigma...')
                 self.generate_theta_field(
                     normalization_type=NormalizationType.PSD, 
-                    new_mean=np.pi/2, new_std=np.sqrt(self.theta_sigma_fit))
+                    new_mean=np.pi/2, new_std=np.sqrt(theta_sigma_fit))
             else:
                 print('Generating theta field...')
                 self.generate_theta_field(normalization_type='psd')
