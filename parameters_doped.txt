@@ -1,0 +1,38 @@
+File: parameters_doped.txt
+
+Box Dimensions:
+x: 256 nm (128 voxels)
+y: 256 nm (128 voxels)
+z: 128 nm (64 voxels)
+Pitch: 2 nm
+
+Fibril Generator Parameters:
+	Size:	FibrilSizeParams(radius_nm_avg=15, radius_nm_std=3, min_fibril_length_nm=100, max_fibril_length_nm=400)
+	Growth:	FibrilGrowthParams(max_num_fibrils=10000, fibril_distribution=<FibrilDistribution.PDS: 1>, c2c_dist_nm=32, symmetrical_growth=True, periodic_bc=False)
+	Orientation:	FibrilOrientationParams(fibril_orientation=<FibrilOrientation.GRF_SAMPLE_ALL: 3>, theta_distribution_csv='data\\theta_distributions\\avg_0p1_theta_distribution.csv', k=0.04, std=0.008)
+
+Post Processor Parameters:
+	Materials:	MaterialParams(mw={1: 166.2842, 2: 166.2842, 3: 276.15}, density={1: 1.1, 2: 1.1, 3: 1.1}, num_materials=4)
+	CoreShell:	CoreShellParams(gaussian_std=3, fibril_shell_cutoff=0.2)
+	Matrix:	MatrixParams(amorph_matrix_Vfrac=0.9, amorph_orientation=True)
+	Surface Roughness:	None
+	Dopant:	DopantParams(dopant_vol_frac=array(0.0242), crystal_dopant_frac=0.5, uniform_doping=False, dopant_orientation=<DopantOrientation.PERPENDICULAR: 3>)
+
+Calculated Mole Fractions:
+	Crystalline Mole Fraction: 0.10761646532071824
+	Amorphous Mole Fraction: 0.8762153626020379
+	Dopant Mole Fraction: 0.016168172077243918
+
+Calculated Volume Fractions:
+	Crystalline Volume Fraction: 0.09699271240234375
+	Amorphous Volume Fraction: 0.7897165588378907
+	Dopant Volume Fraction: 0.024200000000000006
+
+Simulation Energies:
+	C_1s: [270.0, 272.0, 274.0, 276.0, 278.0, 280.0, 282.0, 282.25, 282.5, 282.75, 283.0, 283.25, 283.5, 283.75, 284.0, 284.25, 284.5, 284.75, 285.0, 285.25, 285.5, 285.75, 286.0, 286.5, 287.0, 287.5, 288.0, 288.5, 289.0, 289.5, 290.0, 290.5, 291.0, 291.5, 292.0, 293.0, 294.0, 295.0, 296.0, 297.0, 298.0, 299.0, 300.0, 301.0, 302.0, 303.0, 304.0, 305.0, 306.0, 310.0, 314.0, 318.0, 320.0, 330.0, 340.0]
+
+Materials Dictionary:
+	Material1: vacuum
+	Material2: /home/php/DopantModeling-dev/data/refractive_indices/P3HT_database_C_Kedge.txt
+	Material3: /home/php/DopantModeling-dev/data/refractive_indices/P3HT_database_C_Kedge_isotropic.txt
+	Material4: /home/php/DopantModeling-dev/data/refractive_indices/Reduced_F4TCNQ_C_Kedge.txt

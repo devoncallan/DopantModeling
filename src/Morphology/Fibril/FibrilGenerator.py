@@ -221,6 +221,7 @@ class FibrilGenerator:
                 # Filter out rows with NaN and limit distribution to fit from 2pi/3 to pi/2
                 df = df.dropna()
                 df = df[(df['theta'] >= 60) & (df['theta'] <= 85)]
+                # df = df[(df['theta'] >= 0) & (df['theta'] <= 87)]
                 
                 # Get theta values and percentages
                 chi_values = df['theta'].values
@@ -244,7 +245,7 @@ class FibrilGenerator:
                 ax.plot(fit_x, fit_y, '--', color='orange', linewidth=2, label=f'Fitted Gaussian ($\sigma$ = {theta_sigma_fit:.2f})')
                 
                 # Add labels and title
-                ax.set_xlabel('Theta (degrees)')
+                ax.set_xlabel('Theta (rad)')
                 ax.set_ylabel('Frequency')
                 ax.set_title('Filtered Theta Distribution and Fitted Gaussian')
                 

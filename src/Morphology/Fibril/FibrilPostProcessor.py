@@ -8,6 +8,7 @@ import opensimplex as simplex
 import re
 from tqdm import tqdm
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.spatial.transform import Rotation as R
 
 from src.Morphology.Fibril.FibrilGenerator import FibrilGenerator, Materials
 from src.Morphology.MorphologyData import MorphologyData
@@ -228,30 +229,56 @@ class FibrilPostProcessor:
 
         return data
     
-    def _set_dopant_orientation(self, data:MorphologyData) -> MorphologyData:
-
+    def _set_dopant_orientation(self, data: MorphologyData) -> MorphologyData:
         if self.dopant_params.dopant_orientation == DopantOrientation.NONE:
             return data
+    
+        # Creating masks using np.where
+        dopant_mask = np.where(data.mat_Vfrac[Materials.DOPANT_ID] > 0)
+        crystal_mask = np.where(data.mat_Vfrac[Materials.CRYSTAL_ID] > 0)
+        amorph_mask = np.where(data.mat_Vfrac[Materials.AMORPH_ID] > 0)
+    
+        # Determine overlapping regions for dopant with crystal and amorphous phases
+        overlapping_with_crystal = (data.mat_Vfrac[Materials.DOPANT_ID] > 0) & (data.mat_Vfrac[Materials.CRYSTAL_ID] > 0)
+        overlapping_with_amorph = (data.mat_Vfrac[Materials.DOPANT_ID] > 0) & (data.mat_Vfrac[Materials.AMORPH_ID] > 0)
+    
+        # Set default orientation scalar
+        data.mat_S[Materials.DOPANT_ID][dopant_mask] = 1.0
+    
+        if self.dopant_params.dopant_orientation == DopantOrientation.ISOTROPIC:
+            # Generating isotropic orientation angles
+            theta = np.arccos(1.0 - 2.0 * np.random.rand(*data.mat_Vfrac[Materials.DOPANT_ID].shape))
+            psi = np.random.uniform(-np.pi, np.pi, data.mat_Vfrac[Materials.DOPANT_ID].shape)
+            data.mat_theta[Materials.DOPANT_ID] = theta
+            data.mat_psi[Materials.DOPANT_ID] = psi
+    
+        elif self.dopant_params.dopant_orientation == DopantOrientation.PARALLEL:
+            # Parallel orientation adjustment
+            data.mat_theta[Materials.DOPANT_ID][overlapping_with_crystal] = data.mat_theta[Materials.CRYSTAL_ID][overlapping_with_crystal]
+            data.mat_psi[Materials.DOPANT_ID][overlapping_with_crystal] = data.mat_psi[Materials.CRYSTAL_ID][overlapping_with_crystal]
+            data.mat_theta[Materials.DOPANT_ID][overlapping_with_amorph] = data.mat_theta[Materials.AMORPH_ID][overlapping_with_amorph]
+            data.mat_psi[Materials.DOPANT_ID][overlapping_with_amorph] = data.mat_psi[Materials.AMORPH_ID][overlapping_with_amorph]
+    
+        elif self.dopant_params.dopant_orientation == DopantOrientation.PERPENDICULAR:
+            # Perpendicular orientation adjustment
+            theta_crystal = data.mat_theta[Materials.CRYSTAL_ID][overlapping_with_crystal]
+            psi_crystal = data.mat_psi[Materials.CRYSTAL_ID][overlapping_with_crystal]
+            theta_amorph = data.mat_theta[Materials.AMORPH_ID][overlapping_with_amorph]
+            psi_amorph = data.mat_psi[Materials.AMORPH_ID][overlapping_with_amorph]
+    
+            r_cryst = R.from_euler('zyz', np.stack((np.zeros_like(theta_crystal), theta_crystal, psi_crystal), axis=-1))
+            r_amorph = R.from_euler('zyz', np.stack((np.zeros_like(theta_amorph), theta_amorph, psi_amorph), axis=-1))
+            r_cryst_dopant = r_cryst * R.from_euler('X', np.pi / 2)
+            r_amorph_dopant = r_amorph * R.from_euler('X', np.pi / 2)
+            
+            dopant_euler_crystal = r_cryst_dopant.as_euler('zyz')
+            data.mat_theta[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 1]
+            data.mat_psi[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 2]
+            
+            dopant_euler_amorph = r_amorph_dopant.as_euler('zyz')
+            data.mat_theta[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 1]
+            data.mat_psi[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 2]
 
-        # Set to zero, parallel in crystalline, perpendicular in crystalline, and/or in amorphous, random
-        crystal = data.mat_Vfrac[Materials.CRYSTAL_ID]
-        crystal_mask = crystal > 0.0
-        
-        amorph = data.mat_Vfrac[Materials.AMORPH_ID]
-        amorph_mask = amorph > 0.0
-        
-        dopant_in_crystal = np.sum(data.mat_Vfrac[Materials.DOPANT_ID][crystal_mask]) > 0.0
-        dopant_in_amorph  = np.sum(data.mat_Vfrac[Materials.DOPANT_ID][amorph_mask]) > 0.0
-        
-        if dopant_in_crystal:
-            data.mat_S[Materials.DOPANT_ID][crystal_mask] = 1.0
-            data.mat_theta[Materials.DOPANT_ID][crystal_mask] = data.mat_theta[Materials.CRYSTAL_ID][crystal_mask]
-            data.mat_psi[Materials.DOPANT_ID][crystal_mask] = data.mat_psi[Materials.CRYSTAL_ID][crystal_mask]
-        if dopant_in_amorph:
-            data.mat_S[Materials.DOPANT_ID][amorph_mask] = 1.0
-            data.mat_theta[Materials.DOPANT_ID][amorph_mask] = data.mat_theta[Materials.AMORPH_ID][amorph_mask]
-            data.mat_psi[Materials.DOPANT_ID][amorph_mask] = data.mat_psi[Materials.AMORPH_ID][amorph_mask]
-        
         return data
     
     def save_parameters(self, data:MorphologyData, fibgen:FibrilGenerator, p, filename:str=''):
