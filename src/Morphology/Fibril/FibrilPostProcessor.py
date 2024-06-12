@@ -261,24 +261,24 @@ class FibrilPostProcessor:
     
         elif self.dopant_params.dopant_orientation == DopantOrientation.PERPENDICULAR:
             # Perpendicular orientation adjustment
-            theta_crystal = data.mat_theta[Materials.CRYSTAL_ID][overlapping_with_crystal]
-            psi_crystal = data.mat_psi[Materials.CRYSTAL_ID][overlapping_with_crystal]
-            theta_amorph = data.mat_theta[Materials.AMORPH_ID][overlapping_with_amorph]
-            psi_amorph = data.mat_psi[Materials.AMORPH_ID][overlapping_with_amorph]
+            
+            if np.any(overlapping_with_crystal):
+                theta_crystal = data.mat_theta[Materials.CRYSTAL_ID][overlapping_with_crystal]
+                psi_crystal = data.mat_psi[Materials.CRYSTAL_ID][overlapping_with_crystal]
+                r_cryst = R.from_euler('zyz', np.stack((np.zeros_like(theta_crystal), theta_crystal, psi_crystal), axis=-1))
+                r_cryst_dopant = r_cryst * R.from_euler('X', np.pi / 2)
+                dopant_euler_crystal = r_cryst_dopant.as_euler('zyz')
+                data.mat_theta[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 1]
+                data.mat_psi[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 2]
     
-            r_cryst = R.from_euler('zyz', np.stack((np.zeros_like(theta_crystal), theta_crystal, psi_crystal), axis=-1))
-            r_amorph = R.from_euler('zyz', np.stack((np.zeros_like(theta_amorph), theta_amorph, psi_amorph), axis=-1))
-            r_cryst_dopant = r_cryst * R.from_euler('X', np.pi / 2)
-            r_amorph_dopant = r_amorph * R.from_euler('X', np.pi / 2)
-            
-            dopant_euler_crystal = r_cryst_dopant.as_euler('zyz')
-            data.mat_theta[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 1]
-            data.mat_psi[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 2]
-            
-            dopant_euler_amorph = r_amorph_dopant.as_euler('zyz')
-            data.mat_theta[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 1]
-            data.mat_psi[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 2]
-
+            if np.any(overlapping_with_amorph):
+                theta_amorph = data.mat_theta[Materials.AMORPH_ID][overlapping_with_amorph]
+                psi_amorph = data.mat_psi[Materials.AMORPH_ID][overlapping_with_amorph]
+                r_amorph = R.from_euler('zyz', np.stack((np.zeros_like(theta_amorph), theta_amorph, psi_amorph), axis=-1))
+                r_amorph_dopant = r_amorph * R.from_euler('X', np.pi / 2)
+                dopant_euler_amorph = r_amorph_dopant.as_euler('zyz')
+                data.mat_theta[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 1]
+                data.mat_psi[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 2]
         return data
     
     def save_parameters(self, data:MorphologyData, fibgen:FibrilGenerator, p, filename:str=''):
