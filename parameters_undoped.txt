@@ -19,13 +19,13 @@ Post Processor Parameters:
 	Dopant:	None
 
 Calculated Mole Fractions:
-	Crystalline Mole Fraction: 0.11976243501595966
-	Amorphous Mole Fraction: 0.8802375649840404
+	Crystalline Mole Fraction: 0.1290282496536284
+	Amorphous Mole Fraction: 0.8709717503463716
 	Dopant Mole Fraction: 0.0
 
 Calculated Volume Fractions:
-	Crystalline Volume Fraction: 0.10909271240234375
-	Amorphous Volume Fraction: 0.8018165588378907
+	Crystalline Volume Fraction: 0.11764335632324219
+	Amorphous Volume Fraction: 0.7941209793090821
 	Dopant Volume Fraction: 0.0
 
 Simulation Energies:

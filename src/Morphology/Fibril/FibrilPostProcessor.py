@@ -29,6 +29,7 @@ class DopantOrientation(Enum):
     ISOTROPIC = 1
     PARALLEL = 2
     PERPENDICULAR = 3
+    ISOTROPIC_S0 = 4
     
 ####################################################
 ### Groups of parameters for FibrilPostProcessor ###
@@ -267,6 +268,11 @@ class FibrilPostProcessor:
                 psi_crystal = data.mat_psi[Materials.CRYSTAL_ID][overlapping_with_crystal]
                 r_cryst = R.from_euler('zyz', np.stack((np.zeros_like(theta_crystal), theta_crystal, psi_crystal), axis=-1))
                 r_cryst_dopant = r_cryst * R.from_euler('X', np.pi / 2)
+                
+                # there are infinite orthogonal directions in the orthogonal plane, so pick randomly
+                dist_angle = np.random.uniform(-np.pi, np.pi, data.mat_theta[Materials.DOPANT_ID][overlapping_with_crystal].shape) 
+                r_cryst_dopant = r_cryst_dopant * R.from_euler("Y", dist_angle)
+
                 dopant_euler_crystal = r_cryst_dopant.as_euler('zyz')
                 data.mat_theta[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 1]
                 data.mat_psi[Materials.DOPANT_ID][overlapping_with_crystal] = dopant_euler_crystal[:, 2]
@@ -276,9 +282,24 @@ class FibrilPostProcessor:
                 psi_amorph = data.mat_psi[Materials.AMORPH_ID][overlapping_with_amorph]
                 r_amorph = R.from_euler('zyz', np.stack((np.zeros_like(theta_amorph), theta_amorph, psi_amorph), axis=-1))
                 r_amorph_dopant = r_amorph * R.from_euler('X', np.pi / 2)
+                
+                # there are infinite orthogonal directions in the orthogonal plane, so pick randomly
+                dist_angle = np.random.uniform(-np.pi, np.pi, data.mat_theta[Materials.AMORPH_ID][overlapping_with_amorph].shape) 
+                r_amorph_dopant = r_amorph_dopant * R.from_euler("Y", dist_angle)
+                
                 dopant_euler_amorph = r_amorph_dopant.as_euler('zyz')
                 data.mat_theta[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 1]
                 data.mat_psi[Materials.DOPANT_ID][overlapping_with_amorph] = dopant_euler_amorph[:, 2]
+            
+        elif self.dopant_params.dopant_orientation == DopantOrientation.ISOTROPIC_S0:
+            # same as DopantOrientation.ISOTROPIC, but set S = 0.0
+            data.mat_S[Materials.DOPANT_ID][dopant_mask] = 0.0
+
+            # Generating isotropic orientation angles
+            theta = np.arccos(1.0 - 2.0 * np.random.rand(*data.mat_Vfrac[Materials.DOPANT_ID].shape))
+            psi = np.random.uniform(-np.pi, np.pi, data.mat_Vfrac[Materials.DOPANT_ID].shape)
+            data.mat_theta[Materials.DOPANT_ID] = theta
+            data.mat_psi[Materials.DOPANT_ID] = psi
         return data
     
     def save_parameters(self, data:MorphologyData, fibgen:FibrilGenerator, p, filename:str=''):
